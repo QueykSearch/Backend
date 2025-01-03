@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud storage CRUD APP</title>
+</head>
+<body>
+    <h1>Cloud storage CRUD APP</h1>
+
+    <!-- Form to upload PDF -->
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <label for="pdf">Upload PDF:</label>
+        <input type="file" id="pdf" name="file" accept="application/pdf" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <!-- Section to list all uploaded PDFs -->
+    <h2>Uploaded PDFs</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Download</th>
+                <th>Delete</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% files.forEach(file => { %>
+                <tr>
+                    <td><%= file.name %></td>
+                    <td><a target="_blank" href="/download/<%= file.name %>">Download</a></td>
+                    <form action="/delete" method="post">
+                        <input type="hidden" name="fileName" value="<%= file.name %>">
+                        <td><button type="submit">Delete</button></td>
+                    </form>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+
+    
+</body>
+</html>
