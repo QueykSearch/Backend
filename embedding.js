@@ -1,6 +1,6 @@
 require('dotenv').config();
 const axios = require('axios');
-
+/// pa generar los embedding 
 async function generateEmbedding(query) {
     const url = 'https://api.openai.com/v1/embeddings';
     const openaiKey = process.env.OPEN_AI_KEY;
