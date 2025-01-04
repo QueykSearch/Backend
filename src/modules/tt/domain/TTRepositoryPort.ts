@@ -1,9 +1,31 @@
+// src/modules/tt/domain/TTRepositoryPort.ts
+
 import { TTEntity } from "./entities/TTEntity";
+import { DeepPartial } from "../../../shared/types/DeepPartial";
 
 /**
  * Puerto (interfaz) que define las operaciones del repositorio TT.
  */
 export interface TTRepositoryPort {
   createTT(tt: TTEntity): Promise<TTEntity>;
-  // Podrías añadir: findById, updateTT, deleteTT, etc.
+
+  listTT(filters: {
+    titulo?: string;
+    autor?: string;
+    unidadAcademica?: string;
+    grado?: string;
+    palabrasClave?: string[];
+    anoPublicacion?: number;
+    limit?: number;
+    page?: number;
+  }): Promise<{ total: number; page: number; limit: number; data: TTEntity[] }>;
+
+  findTTById(id: string): Promise<TTEntity | null>;
+
+  updateTTById(
+    id: string,
+    updateData: DeepPartial<TTEntity>
+  ): Promise<TTEntity | null>;
+
+  deleteTTById(id: string): Promise<{ deletedCount: number }>;
 }
