@@ -1,8 +1,10 @@
 // src/app/server.ts
-import express, { Application } from "express";
+
+import express, { Application, Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import { router } from "./routes";
 import { connectMongo } from "../shared/db/MongoClient";
+import cors from "cors"; // Importar cors
 
 // Cargar variables de entorno
 dotenv.config();
@@ -15,6 +17,9 @@ export async function startServer() {
     // Inicializar la aplicación Express
     const app: Application = express();
 
+    // Configurar CORS
+    app.use(cors()); // Usar CORS con configuración por defecto
+
     // Middlewares para parseo de JSON y URL-encoded
     app.use(express.json());
     app.use(express.urlencoded({ extended: false }));
@@ -23,7 +28,7 @@ export async function startServer() {
     app.use("/api/v1", router);
 
     // Middleware de depuración para rutas no encontradas
-    app.use((req, res) => {
+    app.use((req: Request, res: Response) => {
       console.log(`Ruta no encontrada: ${req.method} ${req.url}`);
       res.status(404).send(`Cannot ${req.method} ${req.url}`);
     });
@@ -65,3 +70,30 @@ function listRoutes(app: Application) {
     }
   });
 }
+
+// // Configurar CORS con opciones personalizadas
+// const corsOptions = {
+//   origin: "http://localhost:3000", // Origen permitido
+//   methods: ["GET", "POST", "PUT", "DELETE"], // Métodos HTTP permitidos
+//   credentials: true, // Permitir el envío de cookies si es necesario
+// };
+
+// app.use(cors(corsOptions));
+
+// const allowedOrigins = ["http://localhost:3000", "http://example.com"];
+
+// const corsOptions = {
+//   origin: function (origin: any, callback: any) {
+//     // Permitir solicitudes sin origen (por ejemplo, mobile apps, curl, etc.)
+//     if (!origin) return callback(null, true);
+//     if (allowedOrigins.indexOf(origin) === -1) {
+//       const msg = "El origen CORS no está permitido por la política de este servidor.";
+//       return callback(new Error(msg), false);
+//     }
+//     return callback(null, true);
+//   },
+//   methods: ["GET", "POST", "PUT", "DELETE"],
+//   credentials: true,
+// };
+
+// app.use(cors(corsOptions));
