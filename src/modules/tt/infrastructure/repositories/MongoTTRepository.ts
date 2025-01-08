@@ -77,26 +77,15 @@ export class MongoTTRepository implements TTRepositoryPort {
 
     const query: any = {};
 
-    if (titulo) {
-      query.titulo = { $regex: titulo, $options: "i" }; // Búsqueda insensible
-    }
-
-    if (autor) {
+    if (titulo) query.titulo = { $regex: titulo, $options: "i" };
+    if (autor)
       query["autores.nombreCompleto"] = { $regex: autor, $options: "i" };
-    }
-
-    if (unidadAcademica) {
+    if (unidadAcademica)
       query.unidadAcademica = { $regex: unidadAcademica, $options: "i" };
-    }
-
-    if (grado) {
-      query.grado = { $regex: grado, $options: "i" };
-    }
-
+    if (grado) query.grado = { $regex: grado, $options: "i" };
     if (palabrasClave && palabrasClave.length > 0) {
       query.palabrasClave = { $in: palabrasClave };
     }
-
     if (anoPublicacion) {
       const startDate = new Date(`${anoPublicacion}-01-01`);
       const endDate = new Date(`${anoPublicacion}-12-31`);

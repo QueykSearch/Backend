@@ -27,7 +27,6 @@ export class ListTTUseCase {
     limit: number;
     data: TTEntity[];
   }> {
-    // Lógica adicional de negocio, si es necesario
     return await this.ttRepository.listTT(filters);
   }
 }

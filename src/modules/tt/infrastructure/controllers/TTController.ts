@@ -123,22 +123,17 @@ export class TTController {
   /**
    * Maneja la lista de TTs con filtros y paginación.
    */
-  public listTT = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  public listTT = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Extraer los parámetros de la query
       const filters = {
         titulo: req.query.titulo as string,
         autor: req.query.autor as string,
         unidadAcademica: req.query.unidadAcademica as string,
         grado: req.query.grado as string,
-        palabrasClave: Array.isArray(req.query.palabrasClave)
-          ? (req.query.palabrasClave as string[])
-          : req.query.palabrasClave
-          ? [req.query.palabrasClave as string]
+        palabrasClave: req.query.palabrasClave
+          ? Array.isArray(req.query.palabrasClave)
+            ? (req.query.palabrasClave as string[])
+            : [req.query.palabrasClave as string]
           : [],
         anoPublicacion: req.query.anoPublicacion
           ? Number(req.query.anoPublicacion)
@@ -147,10 +142,8 @@ export class TTController {
         page: req.query.page ? Number(req.query.page) : 1,
       };
 
-      // Ejecutar el caso de uso
       const result = await this.listTTUseCase.execute(filters);
 
-      // Enviar la respuesta
       res.status(200).json({
         message: "Lista de TTs obtenida con éxito",
         data: result,
