@@ -43,12 +43,27 @@ export class TTController {
       }
 
       // Creamos el TT
+
+      // Campos que vienen como JSON
+      // const autores = JSON.parse(req.body.autores || "[]");
+      // const directores = JSON.parse(req.body.directores || "[]");
+      // const palabrasClave = JSON.parse(req.body.palabrasClave || "[]");
+
       const newTT = await this.createTTUseCase.execute({
         titulo: body.titulo,
-        autores: body.autores,
-        palabrasClave: body.palabrasClave,
+        autores:
+          typeof body.autores === "string"
+            ? JSON.parse(body.autores)
+            : body.autores,
+        directores:
+          typeof body.directores === "string"
+            ? JSON.parse(body.directores)
+            : body.directores,
+        palabrasClave:
+          typeof body.palabrasClave === "string"
+            ? JSON.parse(body.palabrasClave)
+            : body.palabrasClave,
         unidadAcademica: body.unidadAcademica,
-        directores: body.directores,
         grado: body.grado,
         resumen: body.resumen,
         documentoUrl: fileUrl || "", // Guardamos la URL

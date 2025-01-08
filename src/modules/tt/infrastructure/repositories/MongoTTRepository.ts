@@ -135,6 +135,7 @@ export class MongoTTRepository implements TTRepositoryPort {
       const updated = await TTModel.findByIdAndUpdate(id, updateData, {
         new: true,
       }).exec();
+      // console.log("updated", updated);
       return updated ? updated.toObject() : null;
     } catch (error) {
       console.error("Error al actualizar TT por ID:", error);
