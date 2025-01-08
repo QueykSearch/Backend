@@ -27,6 +27,7 @@ const TTSchema = new Schema({
   grado: { type: String, required: true },
   resumen: { type: String, required: true },
   documentoUrl: { type: String, required: false },
+  filename: { type: String, required: false },
   fechaPublicacion: { type: Date, default: Date.now },
 });
 

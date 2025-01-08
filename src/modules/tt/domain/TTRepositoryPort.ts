@@ -28,4 +28,6 @@ export interface TTRepositoryPort {
   ): Promise<TTEntity | null>;
 
   deleteTTById(id: string): Promise<{ deletedCount: number }>;
+
+  // downloadTT(id: string): Promise<{ filename: string }>;
 }

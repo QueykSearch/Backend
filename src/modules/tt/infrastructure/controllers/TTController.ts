@@ -23,6 +23,44 @@ export class TTController {
     private readonly googleCloudService: GoogleCloudStorageService
   ) {}
 
+  public downloadTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      if (!ttId) {
+        res.status(400).json({ message: "ttId es requerido" });
+        return;
+      }
+
+      // Buscar TT
+      const tt = await this.getTTByIdUseCase.execute(ttId);
+      if (!tt) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+
+      // Verificar si hay un archivo asociado
+      if (!tt.filename) {
+        res.status(404).json({ message: "No hay archivo asociado" });
+        return;
+      }
+
+      // Generar la URL firmada
+      const signedUrl = await this.googleCloudService.getSignedUrl(tt.filename);
+
+      // Responder con la URL firmada
+      res.json({
+        message: "URL generada con éxito",
+        downloadUrl: signedUrl,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   /**
    * Maneja la creación de un nuevo TT.
    */
@@ -67,6 +105,7 @@ export class TTController {
         grado: body.grado,
         resumen: body.resumen,
         documentoUrl: fileUrl || "", // Guardamos la URL
+        filename: file ? file.originalname : "",
         fechaPublicacion: new Date(),
       });
 

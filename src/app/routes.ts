@@ -28,6 +28,7 @@ router.get("/tts", ttController.listTT);
 router.get("/tts/:ttId", ttController.getTTById);
 router.put("/tts/:ttId", ttController.updateTT);
 router.delete("/tts/:ttId", ttController.deleteTT);
+router.get("/tts/:ttId/download", ttController.downloadTT);
 
 // Rutas específicas para el módulo Usuario
 router.post("/users", userController.createUser); // Registro de usuarios, podría estar protegido si solo admins pueden crear usuarios

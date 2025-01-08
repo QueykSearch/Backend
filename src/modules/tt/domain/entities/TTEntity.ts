@@ -17,7 +17,8 @@ export interface TTEntity {
   }>;
   grado: string;
   resumen: string;
-  documentoUrl: string;
+  documentoUrl?: string;
+  filename?: string;
   fechaPublicacion?: Date;
   // Otras propiedades que requieras...
 }

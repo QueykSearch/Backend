@@ -43,4 +43,5 @@ export const ttController = {
   getTTById: controller.getTTById,
   updateTT: controller.updateTT,
   deleteTT: controller.deleteTT,
+  downloadTT: controller.downloadTT,
 };

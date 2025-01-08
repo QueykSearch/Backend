@@ -1,5 +1,4 @@
-import { Storage } from "@google-cloud/storage";
-import path from "path";
+import { Storage, GetSignedUrlConfig } from "@google-cloud/storage";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -8,7 +7,7 @@ dotenv.config();
  */
 
 const keyFilename = process.env.GCLOUD_KEYFILE || "key.json";
-const bucketName = process.env.GCLOUD_BUCKET || "trabajosterminales"; // Ajusta a tu bucket
+const bucketName = process.env.GCLOUD_BUCKET || "trabajosterminales";
 const storage = new Storage({ keyFilename });
 
 export class GoogleCloudStorageService {
@@ -29,12 +28,45 @@ export class GoogleCloudStorageService {
       });
 
       blobStream.on("finish", async () => {
-        // Generar la URL pública o firmada
+        // Generar la URL pública o firmada (en este caso, preferimos Signed URL o
+        // simplemente almacenar "fileName" en DB y generarla después al descargar)
         const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
         resolve(publicUrl);
       });
 
       blobStream.end(file.buffer);
     });
+  }
+
+  /**
+   * Generar una URL firmada para descargar un archivo.
+   * @param fileName Nombre del archivo en el bucket
+   * @param expiresInMs default 5 minutos
+   */
+  public async getSignedUrl(
+    fileName: string,
+    expiresInMs: number = 1000 * 60 * 5
+  ): Promise<string> {
+    const file = this.bucket.file(fileName);
+    const exists = await file.exists();
+    if (!exists[0]) {
+      throw new Error("File not found in GCS");
+    }
+
+    const options: GetSignedUrlConfig = {
+      action: "read",
+      expires: Date.now() + expiresInMs,
+    };
+
+    const [signedUrl] = await file.getSignedUrl(options);
+    return signedUrl;
+  }
+
+  /**
+   * (Opcional) Eliminar un archivo del bucket
+   */
+  public async deleteFile(fileName: string): Promise<void> {
+    const file = this.bucket.file(fileName);
+    await file.delete();
   }
 }
