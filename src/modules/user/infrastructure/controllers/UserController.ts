@@ -1,18 +1,20 @@
 // src/modules/user/infrastructure/controllers/UserController.ts
 
-import { Request, Response, NextFunction } from "express";
-import { CreateUserUseCase } from "../../application/useCases/CreateUserUseCase";
-import { ListUsersUseCase } from "../../application/useCases/ListUsersUseCase";
-import { GetUserByIdUseCase } from "../../application/useCases/GetUserByIdUseCase";
-import { UpdateUserUseCase } from "../../application/useCases/UpdateUserUseCase";
-import { DeleteUserUseCase } from "../../application/useCases/DeleteUserUseCase";
+import {Request, Response, NextFunction} from "express";
+import {CreateUserUseCase} from "../../application/useCases/CreateUserUseCase";
+import {ListUsersUseCase} from "../../application/useCases/ListUsersUseCase";
+import {GetUserByIdUseCase} from "../../application/useCases/GetUserByIdUseCase";
+import {UpdateUserUseCase} from "../../application/useCases/UpdateUserUseCase";
+import {DeleteUserUseCase} from "../../application/useCases/DeleteUserUseCase";
 // import { AuthService } from '../services/AuthService';
-import { CreateUserDTO } from "../dtos/CreateUserDTO";
-import { UpdateUserDTO } from "../dtos/UpdateUserDTO";
-import { DeepPartial } from "../../../../shared/types/DeepPartial";
-import { UserEntity } from "../../domain/entities/UserEntity";
-import { createUserSchema } from "../validators/CreateUserValidator";
-import { updateUserSchema } from "../validators/UpdateUserValidator";
+import {CreateUserDTO} from "../dtos/CreateUserDTO";
+import {UpdateUserDTO} from "../dtos/UpdateUserDTO";
+import {DeepPartial} from "../../../../shared/types/DeepPartial";
+import {UserEntity} from "../../domain/entities/UserEntity";
+import {createUserSchema} from "../validators/CreateUserValidator";
+import {updateUserSchema} from "../validators/UpdateUserValidator";
+import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+import {AuthTokenResponsePassword} from "@supabase/supabase-js";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con Usuarios.
@@ -25,7 +27,8 @@ export class UserController {
     private readonly updateUserUseCase: UpdateUserUseCase,
     private readonly deleteUserUseCase: DeleteUserUseCase
   ) // private readonly authService: AuthService
-  {}
+  {
+  }
 
   /**
    * Maneja la creación de un nuevo Usuario.
@@ -37,11 +40,11 @@ export class UserController {
   ): Promise<void> => {
     try {
       // Validar los datos del body
-      const { error, value } = createUserSchema.validate(req.body);
+      const {error, value} = createUserSchema.validate(req.body);
       if (error) {
         res
           .status(400)
-          .json({ message: "Datos inválidos", details: error.details });
+          .json({message: "Datos inválidos", details: error.details});
         return;
       }
 
@@ -68,7 +71,7 @@ export class UserController {
     } catch (error: any) {
       // Manejo de errores específicos
       if (error.message === "El email ya está en uso") {
-        res.status(409).json({ message: error.message });
+        res.status(409).json({message: error.message});
         return;
       }
       next(error);
@@ -112,17 +115,17 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const { userId } = req.params;
+      const {userId} = req.params;
 
       if (!userId) {
-        res.status(400).json({ message: "userId es requerido" });
+        res.status(400).json({message: "userId es requerido"});
         return;
       }
 
       const user = await this.getUserByIdUseCase.execute(userId);
 
       if (!user) {
-        res.status(404).json({ message: "Usuario no encontrado" });
+        res.status(404).json({message: "Usuario no encontrado"});
         return;
       }
 
@@ -144,20 +147,20 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const { userId } = req.params;
+      const {userId} = req.params;
       const updateData: UpdateUserDTO = req.body;
 
       if (!userId) {
-        res.status(400).json({ message: "userId es requerido" });
+        res.status(400).json({message: "userId es requerido"});
         return;
       }
 
       // Validar los datos de actualización
-      const { error, value } = updateUserSchema.validate(updateData);
+      const {error, value} = updateUserSchema.validate(updateData);
       if (error) {
         res
           .status(400)
-          .json({ message: "Datos inválidos", details: error.details });
+          .json({message: "Datos inválidos", details: error.details});
         return;
       }
 
@@ -167,7 +170,7 @@ export class UserController {
       );
 
       if (!updatedUser) {
-        res.status(404).json({ message: "Usuario no encontrado" });
+        res.status(404).json({message: "Usuario no encontrado"});
         return;
       }
 
@@ -177,7 +180,7 @@ export class UserController {
       });
     } catch (error: any) {
       if (error.message === "El email ya está en uso") {
-        res.status(409).json({ message: error.message });
+        res.status(409).json({message: error.message});
         return;
       }
       next(error);
@@ -193,17 +196,17 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const { userId } = req.params;
+      const {userId} = req.params;
 
       if (!userId) {
-        res.status(400).json({ message: "userId es requerido" });
+        res.status(400).json({message: "userId es requerido"});
         return;
       }
 
       const deleted = await this.deleteUserUseCase.execute(userId);
 
       if (!deleted) {
-        res.status(404).json({ message: "Usuario no encontrado" });
+        res.status(404).json({message: "Usuario no encontrado"});
         return;
       }
 
@@ -225,27 +228,30 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const { email, password } = req.body;
+      const {email, password} = req.body;
 
       if (!email || !password) {
-        res.status(400).json({ message: "Email y contraseña son requeridos" });
+        res.status(400).json({message: "Email y contraseña son requeridos"});
         return;
       }
 
-      // Si Auth0 maneja la autenticación, este método puede ser redundante.
-      // Puedes eliminarlo o adaptarlo según tus necesidades.
+      const response: AuthTokenResponsePassword = await supabaseClient.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
 
-      // Ejemplo simplificado:
-      // const token = await this.authService.login(email, password);
-      // if (!token) {
-      //   res.status(401).json({ message: 'Credenciales inválidas' });
-      //   return;
-      // }
+      if (response.error) {
+        res.status(401).json({message: "Credenciales inválidas"});
+        return;
+      }
 
-      // res.status(200).json({
-      //   message: 'Inicio de sesión exitoso',
-      //   token
-      // });
+      if (!response.data.user) {
+        res.status(404).json({message: "Usuario no encontrado"});
+        return;
+      }
+
+      // Obtener el token de sesión
+      const token = response.data.session.access_token;
     } catch (error: any) {
       next(error);
     }
