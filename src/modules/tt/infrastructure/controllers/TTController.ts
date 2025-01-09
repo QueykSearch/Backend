@@ -10,6 +10,7 @@ import { UpdateTTDTO } from "../dtos/UpdateTTDTO";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTEntity } from "../../domain/entities/TTEntity";
 import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearchUseCase";
+import { MetadataExtractorService } from "../services/MetadataExtractorService";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -22,7 +23,8 @@ export class TTController {
     private readonly updateTTUseCase: UpdateTTUseCase,
     private readonly deleteTTUseCase: DeleteTTUseCase,
     private readonly googleCloudService: GoogleCloudStorageService,
-    private readonly semanticSearchUseCase: SemanticSearchUseCase
+    private readonly semanticSearchUseCase: SemanticSearchUseCase,
+    private readonly metadataExtractorService: MetadataExtractorService
   ) {}
 
   public downloadTT = async (
@@ -73,15 +75,17 @@ export class TTController {
   ): Promise<void> => {
     try {
       // Extraer los datos del body (DTO)
-      const body: CreateTTDTO = req.body;
+      let body: CreateTTDTO = req.body;
       const file = req.file; // vía multer
 
       // Si hay archivo, subimos primero a GCS
       let fileUrl = "";
       if (file) {
         fileUrl = await this.googleCloudService.uploadFile(file);
+        const metadata:CreateTTDTO = await this.metadataExtractorService.generarMetadata(file.buffer);
+        body=metadata;
       }
-
+      
       // Creamos el TT
 
       // Campos que vienen como JSON
