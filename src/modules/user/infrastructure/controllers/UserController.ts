@@ -21,11 +21,11 @@ import {AuthTokenResponsePassword} from "@supabase/supabase-js";
  */
 export class UserController {
   constructor(
-    private readonly createUserUseCase: CreateUserUseCase,
-    private readonly listUsersUseCase: ListUsersUseCase,
-    private readonly getUserByIdUseCase: GetUserByIdUseCase,
-    private readonly updateUserUseCase: UpdateUserUseCase,
-    private readonly deleteUserUseCase: DeleteUserUseCase
+      private readonly createUserUseCase: CreateUserUseCase,
+      private readonly listUsersUseCase: ListUsersUseCase,
+      private readonly getUserByIdUseCase: GetUserByIdUseCase,
+      private readonly updateUserUseCase: UpdateUserUseCase,
+      private readonly deleteUserUseCase: DeleteUserUseCase
   ) // private readonly authService: AuthService
   {
   }
@@ -34,17 +34,17 @@ export class UserController {
    * Maneja la creación de un nuevo Usuario.
    */
   public createUser = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+      req: Request,
+      res: Response,
+      next: NextFunction
   ): Promise<void> => {
     try {
       // Validar los datos del body
       const {error, value} = createUserSchema.validate(req.body);
       if (error) {
         res
-          .status(400)
-          .json({message: "Datos inválidos", details: error.details});
+            .status(400)
+            .json({message: "Datos inválidos", details: error.details});
         return;
       }
 
@@ -82,9 +82,9 @@ export class UserController {
    * Maneja la lista de Usuarios con filtros y paginación.
    */
   public listUsers = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+      req: Request,
+      res: Response,
+      next: NextFunction
   ): Promise<void> => {
     try {
       const filters = {
@@ -110,9 +110,9 @@ export class UserController {
    * Maneja obtener un Usuario por su ID.
    */
   public getUserById = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+      req: Request,
+      res: Response,
+      next: NextFunction
   ): Promise<void> => {
     try {
       const {userId} = req.params;
@@ -142,9 +142,9 @@ export class UserController {
    * Maneja actualizar un Usuario existente.
    */
   public updateUser = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+      req: Request,
+      res: Response,
+      next: NextFunction
   ): Promise<void> => {
     try {
       const {userId} = req.params;
@@ -159,14 +159,14 @@ export class UserController {
       const {error, value} = updateUserSchema.validate(updateData);
       if (error) {
         res
-          .status(400)
-          .json({message: "Datos inválidos", details: error.details});
+            .status(400)
+            .json({message: "Datos inválidos", details: error.details});
         return;
       }
 
       const updatedUser = await this.updateUserUseCase.execute(
-        userId,
-        value as DeepPartial<UserEntity>
+          userId,
+          value as DeepPartial<UserEntity>
       );
 
       if (!updatedUser) {
@@ -191,9 +191,9 @@ export class UserController {
    * Maneja eliminar un Usuario.
    */
   public deleteUser = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
+      req: Request,
+      res: Response,
+      next: NextFunction
   ): Promise<void> => {
     try {
       const {userId} = req.params;
@@ -214,6 +214,38 @@ export class UserController {
         message: "Usuario eliminado con éxito",
       });
     } catch (error: any) {
+      next(error);
+    }
+  };
+
+  public refreshTokens = async (
+      req: Request,
+      res: Response,
+      next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        res.status(400).json({ message: "No se recibió refreshToken" });
+        return;
+      }
+
+      const { data, error } = await supabaseClient.auth.refreshSession({
+        refresh_token: refreshToken,
+      });
+
+      if (error || !data?.session) {
+        res.status(401).json({ message: "Refresh token inválido" });
+        return;
+      }
+
+      res.status(200).json({
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        expiresIn: data.session.expires_in,
+      });
+    } catch (error) {
       next(error);
     }
   };
@@ -250,8 +282,17 @@ export class UserController {
         return;
       }
 
-      // Obtener el token de sesión
-      const token = response.data.session.access_token;
+      const { session } = response.data;
+      const { access_token, refresh_token, expires_in } = session;
+
+      res.status(200).json({
+        message: "Inicio de sesión exitoso",
+        data: {
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          expiresIn: expires_in
+        },
+      });
     } catch (error: any) {
       next(error);
     }
