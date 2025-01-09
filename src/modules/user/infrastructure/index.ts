@@ -7,6 +7,7 @@ import { GetUserByIdUseCase } from "../application/useCases/GetUserByIdUseCase";
 import { UpdateUserUseCase } from "../application/useCases/UpdateUserUseCase";
 import { DeleteUserUseCase } from "../application/useCases/DeleteUserUseCase";
 import { UserController } from "./controllers/UserController";
+import {LoginUserUseCase} from "../application/useCases/LoginUserUseCase";
 // import { AuthService } from './services/AuthService'; // Opcional si Auth0 maneja todo
 
 // 1. Instancia del repositorio (Mongo)
@@ -18,6 +19,7 @@ const listUsersUseCase = new ListUsersUseCase(userRepository);
 const getUserByIdUseCase = new GetUserByIdUseCase(userRepository);
 const updateUserUseCase = new UpdateUserUseCase(userRepository);
 const deleteUserUseCase = new DeleteUserUseCase(userRepository);
+const loginUserUseCase = new LoginUserUseCase(userRepository); // Opcional: Método de login
 
 // 3. Instancia del servicio de autenticación
 // const authService = new AuthService(userRepository); // Opcional
@@ -28,8 +30,8 @@ const controller = new UserController(
   listUsersUseCase,
   getUserByIdUseCase,
   updateUserUseCase,
-  deleteUserUseCase
-  // authService // Opcional
+  deleteUserUseCase,
+  loginUserUseCase
 );
 
 // 5. Exportar el controlador con los métodos
@@ -39,5 +41,6 @@ export const userController = {
   getUserById: controller.getUserById,
   updateUser: controller.updateUser,
   deleteUser: controller.deleteUser,
+  refreshToken: controller.refreshToken, // Opcional: Método de refresco de token
   loginUser: controller.loginUser, // Opcional: Método de login
 };

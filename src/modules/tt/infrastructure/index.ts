@@ -9,7 +9,6 @@ import { SemanticSearchUseCase } from "../application/useCases/SemanticSearchUse
 import { TTController } from "./controllers/TTController";
 import { GoogleCloudStorageService } from "./services/GoogleCloudStorageService";
 import { EmbeddingService } from "./services/EmbeddingService";
-import { MetadataExtractorService } from "./services/MetadataExtractorService";
 // import { DeepPartial } from '../../../shared/types/DeepPartial';
 
 // 1. Instancia del repositorio (Mongo)
@@ -27,7 +26,7 @@ const semanticSearchUseCase = new SemanticSearchUseCase(
   ttRepository,
   embeddingService
 );
-const metadataExtractorService= new MetadataExtractorService();
+
 // 3. Instancia del servicio de GCS
 const googleCloudService = new GoogleCloudStorageService();
 
@@ -39,8 +38,7 @@ const controller = new TTController(
   updateTTUseCase,
   deleteTTUseCase,
   googleCloudService,
-  semanticSearchUseCase,
-  metadataExtractorService
+  semanticSearchUseCase
 );
 
 // 5. Configurar Multer
