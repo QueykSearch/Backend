@@ -9,6 +9,7 @@ import { CreateTTDTO } from "../dtos/CreateTTDTO";
 import { UpdateTTDTO } from "../dtos/UpdateTTDTO";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTEntity } from "../../domain/entities/TTEntity";
+import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearchUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -20,7 +21,8 @@ export class TTController {
     private readonly getTTByIdUseCase: GetTTByIdUseCase,
     private readonly updateTTUseCase: UpdateTTUseCase,
     private readonly deleteTTUseCase: DeleteTTUseCase,
-    private readonly googleCloudService: GoogleCloudStorageService
+    private readonly googleCloudService: GoogleCloudStorageService,
+    private readonly semanticSearchUseCase: SemanticSearchUseCase
   ) {}
 
   public downloadTT = async (
@@ -248,6 +250,29 @@ export class TTController {
         message: "TT eliminado con éxito",
       });
     } catch (error: any) {
+      next(error);
+    }
+  };
+
+  public searchSemanticTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const queryString = req.query.query as string;
+      if (!queryString) {
+        res.status(400).json({ message: "Falta 'query' en los query params" });
+        return;
+      }
+
+      const results = await this.semanticSearchUseCase.execute(queryString);
+      res.json({
+        message: "Resultados semánticos",
+        data: results,
+      });
+      return;
+    } catch (error) {
       next(error);
     }
   };

@@ -20,5 +20,6 @@ export interface TTEntity {
   documentoUrl?: string;
   filename?: string;
   fechaPublicacion?: Date;
+  plot_embedding?: number[];
   // Otras propiedades que requieras...
 }

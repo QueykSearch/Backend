@@ -5,19 +5,27 @@ import { ListTTUseCase } from "../application/useCases/ListTTUseCase";
 import { GetTTByIdUseCase } from "../application/useCases/GetTTByIdUseCase";
 import { UpdateTTUseCase } from "../application/useCases/UpdateTTUseCase";
 import { DeleteTTUseCase } from "../application/useCases/DeleteTTUseCase";
+import { SemanticSearchUseCase } from "../application/useCases/SemanticSearchUseCase";
 import { TTController } from "./controllers/TTController";
 import { GoogleCloudStorageService } from "./services/GoogleCloudStorageService";
+import { EmbeddingService } from "./services/EmbeddingService";
 // import { DeepPartial } from '../../../shared/types/DeepPartial';
 
 // 1. Instancia del repositorio (Mongo)
+const embeddingService = new EmbeddingService();
 const ttRepository = new MongoTTRepository();
 
 // 2. Instancia de los casos de uso
-const createTTUseCase = new CreateTTUseCase(ttRepository);
+const createTTUseCase = new CreateTTUseCase(ttRepository, embeddingService);
 const listTTUseCase = new ListTTUseCase(ttRepository);
 const getTTByIdUseCase = new GetTTByIdUseCase(ttRepository);
-const updateTTUseCase = new UpdateTTUseCase(ttRepository);
+const updateTTUseCase = new UpdateTTUseCase(ttRepository, embeddingService);
 const deleteTTUseCase = new DeleteTTUseCase(ttRepository);
+
+const semanticSearchUseCase = new SemanticSearchUseCase(
+  ttRepository,
+  embeddingService
+);
 
 // 3. Instancia del servicio de GCS
 const googleCloudService = new GoogleCloudStorageService();
@@ -29,7 +37,8 @@ const controller = new TTController(
   getTTByIdUseCase,
   updateTTUseCase,
   deleteTTUseCase,
-  googleCloudService
+  googleCloudService,
+  semanticSearchUseCase
 );
 
 // 5. Configurar Multer
@@ -44,4 +53,5 @@ export const ttController = {
   updateTT: controller.updateTT,
   deleteTT: controller.deleteTT,
   downloadTT: controller.downloadTT,
+  searchSemanticTT: controller.searchSemanticTT,
 };

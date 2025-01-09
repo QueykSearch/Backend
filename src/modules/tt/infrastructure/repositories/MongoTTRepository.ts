@@ -29,6 +29,7 @@ const TTSchema = new Schema({
   documentoUrl: { type: String, required: false },
   filename: { type: String, required: false },
   fechaPublicacion: { type: Date, default: Date.now },
+  plot_embedding: { type: [Number], default: [] }, // <-- Almacena array de floats
 });
 
 export interface TTDocument extends TTEntity, Document {
@@ -141,6 +142,43 @@ export class MongoTTRepository implements TTRepositoryPort {
       console.error("Error al eliminar TT por ID:", error);
       throw error;
     }
+  }
+
+  public async findBySemanticQuery(embedding: number[]): Promise<TTEntity[]> {
+    // MongoDB Aggregation pipeline con $vectorSearch
+    // Nombre del índice: "vector_index_resumen" (debes configurarlo en Atlas)
+    const pipeline = [
+      {
+        $vectorSearch: {
+          index: "vector_index_resumen",
+          path: "plot_embedding",
+          queryVector: embedding,
+          numCandidates: 50, // Ajusta según quieras
+          limit: 2,
+        },
+      },
+    ];
+
+    // Convertir cada documento en TTEntity
+    // Ojo: Mongoose .aggregate() retorna objetos plain, no instancias.
+    // console.log("Pipeline de búsqueda semántica:", pipeline);
+    const results = await TTModel.aggregate(pipeline).exec();
+
+    // console.log("Resultados de búsqueda semántica:", results);
+
+    return results.map((doc: any) => ({
+      _id: doc._id?.toString(),
+      titulo: doc.titulo,
+      autores: doc.autores,
+      palabrasClave: doc.palabrasClave,
+      unidadAcademica: doc.unidadAcademica,
+      directores: doc.directores,
+      grado: doc.grado,
+      resumen: doc.resumen,
+      documentoUrl: doc.documentoUrl,
+      fechaPublicacion: doc.fechaPublicacion,
+      plot_embedding: doc.plot_embedding,
+    }));
   }
 
   // Otros métodos como findTTsByQuery, etc.

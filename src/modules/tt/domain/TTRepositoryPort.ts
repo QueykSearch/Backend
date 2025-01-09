@@ -29,5 +29,7 @@ export interface TTRepositoryPort {
 
   deleteTTById(id: string): Promise<{ deletedCount: number }>;
 
+  findBySemanticQuery(embedding: number[]): Promise<TTEntity[]>;
+
   // downloadTT(id: string): Promise<{ filename: string }>;
 }

@@ -23,6 +23,8 @@ export const router = Router();
 // router.delete("/users/:userId", checkJwt, checkRoles('admin'), userController.deleteUser);
 // router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
 
+router.get("/tts/semantic", ttController.searchSemanticTT);
+
 router.post("/tts", ttController.createTT, ttController.createTTHandler);
 router.get("/tts", ttController.listTT);
 router.get("/tts/:ttId", ttController.getTTById);
