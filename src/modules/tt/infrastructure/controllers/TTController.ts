@@ -295,7 +295,7 @@ export class TTController {
         data:metadata
       })
     } catch (error) {
-      
+      next(error)
     }
   }
 }
