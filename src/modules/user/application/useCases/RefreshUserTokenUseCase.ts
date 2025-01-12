@@ -1,6 +1,7 @@
 import {UserRepositoryPort} from "../../domain/UserRepositoryPort";
 import {UserEntity} from "../../domain/entities/UserEntity";
 import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+import {AuthResponse} from "@supabase/supabase-js";
 
 export class RefreshUserTokenUseCase {
   constructor(private readonly userRepository: UserRepositoryPort) {
@@ -14,31 +15,41 @@ export class RefreshUserTokenUseCase {
     expiresAt: number,
     user: UserEntity
   }> {
-    const {data, error} = await supabaseClient.auth.refreshSession(params);
-
-    if (error || !data?.session) {
-      throw new Error("Refresh token inválido");
+    const response: AuthResponse = await supabaseClient.auth.refreshSession(params);
+    if (response.error) {
+      switch (response.error.code) {
+        case 'refresh_token_not_found':
+          throw new Error("Token de refresco no encontrado");
+        case 'refresh_token_already_used':
+          throw new Error("Token de refresco ya utilizado");
+        default:
+          throw new Error("Error al refrescar sesión");
+      }
     }
 
-    if (!data.user) {
-      throw new Error("Usuario no encontrado");
+    const {session} = response.data;
+
+    if (!session) {
+      throw new Error("Sesión no encontrada");
     }
 
-    if (!data.user.email) {
-      throw new Error("Email no encontrado");
+    if (!session.user.email) {
+      throw new Error("Email del usuario no encontrado");
     }
 
-    const userEntity: UserEntity | null = await this.userRepository.findUserByEmail(data.user.email);
+    const {access_token, refresh_token, expires_at} = session;
+
+    const userEntity: UserEntity | null = await this.userRepository.findUserByEmail(session.user.email);
 
     if (!userEntity) {
       throw new Error("Usuario no encontrado");
     }
 
     return {
-      accessToken: data.session.access_token,
-      refreshToken: data.session.refresh_token,
-      expiresAt: data.session.expires_at || 0,
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresAt: expires_at || 0,
       user: userEntity
-    };
+    }
   }
 }

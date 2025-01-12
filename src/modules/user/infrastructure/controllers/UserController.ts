@@ -17,6 +17,7 @@ import {supabaseClient} from "../../../../shared/db/SupabaseClient";
 import {AuthResponse, AuthTokenResponsePassword} from "@supabase/supabase-js";
 import {LoginUserUseCase} from "../../application/useCases/LoginUserUseCase";
 import {RefreshUserTokenUseCase} from "../../application/useCases/RefreshUserTokenUseCase";
+import {LoginUserWithTokenUseCase} from "../../application/useCases/LoginUserWithTokenUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con Usuarios.
@@ -29,7 +30,8 @@ export class UserController {
     private readonly updateUserUseCase: UpdateUserUseCase,
     private readonly deleteUserUseCase: DeleteUserUseCase,
     private readonly loginUserUseCase: LoginUserUseCase,
-    private readonly refreshUserTokenUseCase: RefreshUserTokenUseCase
+    private readonly refreshUserTokenUseCase: RefreshUserTokenUseCase,
+    private readonly loginUserWithTokenUseCase: LoginUserWithTokenUseCase
   ) // private readonly authService: AuthService
   {
   }
@@ -229,6 +231,32 @@ export class UserController {
       next(error);
     }
   };
+
+  public loginUserWithToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {accessToken, refreshToken, expiresAt} = req.body;
+
+      if (!accessToken || !refreshToken || !expiresAt) {
+        res.status(400).json({message: "accessToken, refreshToken y expiresAt son requeridos"});
+        return;
+      }
+
+      res.status(200).json({
+        message: "Inicio de sesión exitoso",
+        data: await this.loginUserWithTokenUseCase.execute(req.body),
+      });
+    } catch (error: any) {
+      if (error.message === "Credenciales inválidas") {
+        res.status(401).json({message: error.message});
+        return;
+      }
+      next(error);
+    }
+  }
 
   /**
    * (Opcional) Maneja el inicio de sesión de un Usuario.

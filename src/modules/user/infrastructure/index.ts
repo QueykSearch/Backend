@@ -1,13 +1,15 @@
 // src/modules/user/infrastructure/index.ts
 
-import { MongoUserRepository } from "./repositories/MongoUserRepository";
-import { CreateUserUseCase } from "../application/useCases/CreateUserUseCase";
-import { ListUsersUseCase } from "../application/useCases/ListUsersUseCase";
-import { GetUserByIdUseCase } from "../application/useCases/GetUserByIdUseCase";
-import { UpdateUserUseCase } from "../application/useCases/UpdateUserUseCase";
-import { DeleteUserUseCase } from "../application/useCases/DeleteUserUseCase";
-import { UserController } from "./controllers/UserController";
+import {MongoUserRepository} from "./repositories/MongoUserRepository";
+import {CreateUserUseCase} from "../application/useCases/CreateUserUseCase";
+import {ListUsersUseCase} from "../application/useCases/ListUsersUseCase";
+import {GetUserByIdUseCase} from "../application/useCases/GetUserByIdUseCase";
+import {UpdateUserUseCase} from "../application/useCases/UpdateUserUseCase";
+import {DeleteUserUseCase} from "../application/useCases/DeleteUserUseCase";
+import {UserController} from "./controllers/UserController";
 import {LoginUserUseCase} from "../application/useCases/LoginUserUseCase";
+import {LoginUserWithTokenUseCase} from "../application/useCases/LoginUserWithTokenUseCase";
+import {RefreshUserTokenUseCase} from "../application/useCases/RefreshUserTokenUseCase";
 // import { AuthService } from './services/AuthService'; // Opcional si Auth0 maneja todo
 
 // 1. Instancia del repositorio (Mongo)
@@ -20,6 +22,8 @@ const getUserByIdUseCase = new GetUserByIdUseCase(userRepository);
 const updateUserUseCase = new UpdateUserUseCase(userRepository);
 const deleteUserUseCase = new DeleteUserUseCase(userRepository);
 const loginUserUseCase = new LoginUserUseCase(userRepository); // Opcional: Método de login
+const refreshUserTokenUseCase = new RefreshUserTokenUseCase(userRepository); // Opcional: Método de refresco de token
+const loginUserWithTokenUseCase = new LoginUserWithTokenUseCase(userRepository, refreshUserTokenUseCase); // Opcional: Método de login con token
 
 // 3. Instancia del servicio de autenticación
 // const authService = new AuthService(userRepository); // Opcional
@@ -31,7 +35,9 @@ const controller = new UserController(
   getUserByIdUseCase,
   updateUserUseCase,
   deleteUserUseCase,
-  loginUserUseCase
+  loginUserUseCase,
+  refreshUserTokenUseCase,
+  loginUserWithTokenUseCase
 );
 
 // 5. Exportar el controlador con los métodos
@@ -42,5 +48,6 @@ export const userController = {
   updateUser: controller.updateUser,
   deleteUser: controller.deleteUser,
   refreshToken: controller.refreshToken, // Opcional: Método de refresco de token
+  loginUserWithToken: controller.loginUserWithToken,
   loginUser: controller.loginUser, // Opcional: Método de login
 };
