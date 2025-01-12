@@ -24,7 +24,7 @@ export const router = Router();
 // router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
 
 router.get("/tts/semantic", ttController.searchSemanticTT);
-
+router.post("/tts/metadata",ttController.createTT,ttController.extractMetadata);
 router.post("/tts", ttController.createTT, ttController.createTTHandler);
 router.get("/tts", ttController.listTT);
 router.get("/tts/:ttId", ttController.getTTById);
