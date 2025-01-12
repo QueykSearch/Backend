@@ -38,7 +38,9 @@ router.get("/users", userController.listUsers);
 router.get("/users/:userId", userController.getUserById);
 router.put("/users/:userId", userController.updateUser);
 router.delete("/users/:userId", userController.deleteUser);
+router.post("/refresh-token", userController.refreshToken); // Opcional: Ruta de refresco de token
 router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
+router.post("/login-with-token", userController.loginUserWithToken); // Opcional: Ruta de login con token
 
 // Ruta de prueba para verificar que las rutas están funcionando
 router.get("/test", (req, res) => {
