@@ -10,6 +10,7 @@ import { UpdateTTDTO } from "../dtos/UpdateTTDTO";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTEntity } from "../../domain/entities/TTEntity";
 import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearchUseCase";
+import { ExtractMetadataUseCase } from "../../application/useCases/ExtractMetadataUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -22,7 +23,8 @@ export class TTController {
     private readonly updateTTUseCase: UpdateTTUseCase,
     private readonly deleteTTUseCase: DeleteTTUseCase,
     private readonly googleCloudService: GoogleCloudStorageService,
-    private readonly semanticSearchUseCase: SemanticSearchUseCase
+    private readonly semanticSearchUseCase: SemanticSearchUseCase,
+    private readonly extractMetadataUseCase: ExtractMetadataUseCase
   ) {}
 
   public downloadTT = async (
@@ -276,4 +278,24 @@ export class TTController {
       next(error);
     }
   };
+  public extractMetadata=async(
+    req:Request,
+    res:Response,
+    next:NextFunction
+  ):Promise<void>=>{
+    try {
+      const file = req.file
+      if(!file){
+        res.status(400).json({message:"Falta el pdf en el req"});
+        return;
+      }
+      const metadata = await this.extractMetadataUseCase.execute(file.buffer) 
+      res.json({
+        message:"Metadata Extraida Correctamente",
+        data:metadata
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
 }
