@@ -16,6 +16,7 @@ import {updateUserSchema} from "../validators/UpdateUserValidator";
 import {supabaseClient} from "../../../../shared/db/SupabaseClient";
 import {AuthResponse, AuthTokenResponsePassword} from "@supabase/supabase-js";
 import {LoginUserUseCase} from "../../application/useCases/LoginUserUseCase";
+import {RefreshUserTokenUseCase} from "../../application/useCases/RefreshUserTokenUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con Usuarios.
@@ -28,6 +29,7 @@ export class UserController {
     private readonly updateUserUseCase: UpdateUserUseCase,
     private readonly deleteUserUseCase: DeleteUserUseCase,
     private readonly loginUserUseCase: LoginUserUseCase,
+    private readonly refreshUserTokenUseCase: RefreshUserTokenUseCase
   ) // private readonly authService: AuthService
   {
   }
@@ -218,24 +220,11 @@ export class UserController {
       const {refreshToken} = req.body;
 
       if (!refreshToken) {
-        res.status(400).json({message: "No se recibió refreshToken"});
+        res.status(400).json({message: "refreshToken es requerido"});
         return;
       }
 
-      const {data, error} = await supabaseClient.auth.refreshSession({
-        refresh_token: refreshToken,
-      });
-
-      if (error || !data?.session) {
-        res.status(401).json({message: "Refresh token inválido"});
-        return;
-      }
-
-      res.status(200).json({
-        accessToken: data.session.access_token,
-        refreshToken: data.session.refresh_token,
-        expiresAt: data.session.expires_at,
-      });
+      res.status(200).json(await this.refreshUserTokenUseCase.execute(req.body));
     } catch (error) {
       next(error);
     }
