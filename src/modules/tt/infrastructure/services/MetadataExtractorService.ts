@@ -12,7 +12,8 @@ export class MetadataExtractorService {
   async generarMetadata(pdfFile: Buffer | string): Promise<any> {
     try {
       // Leer el contenido del archivo PDF
-      const pdfBuffer = typeof pdfFile === "string" ? fs.readFileSync(pdfFile) : pdfFile;
+      const pdfBuffer =
+        typeof pdfFile === "string" ? fs.readFileSync(pdfFile) : pdfFile;
       const pdfData = await pdfParse(pdfBuffer);
 
       // Limitar el texto a un máximo de 5000 caracteres
@@ -29,16 +30,19 @@ export class MetadataExtractorService {
       - "directores": Un arreglo de objetos con "nombreCompleto" y opcionalmente "orcid".
       - "grado": El grado académico relacionado (Maestría, Licenciatura, Doctorado).
       - "resumen": Un breve resumen del documento (minimo de 100 palabras pero que este bien descrito) (es lo más importante ya que se usará para luego crear embeddings).
-      - "fechaPublicacion": La fecha de publicación (si está disponible).
+      - "fechaPublicacion": La fecha de publicación (si está disponible y en año unicamente, es decir, numero de 4 dígitos).
       Texto del documento:
       ---
       ${limitedText}
       ---
-      `;   
+      `;
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "Eres un modelo que extrae metadata académica." },
+          {
+            role: "system",
+            content: "Eres un modelo que extrae metadata académica.",
+          },
           { role: "user", content: prompt },
         ],
         max_tokens: 500,
@@ -57,7 +61,7 @@ export class MetadataExtractorService {
 
       if (response.choices[0].message?.content) {
         const responseContent = response.choices[0].message.content.trim();
-        const jsonResponse = responseContent.replace(/json|/g, '').trim();
+        const jsonResponse = responseContent.replace(/json|/g, "").trim();
 
         try {
           const parsedMetadata = JSON.parse(jsonResponse);
