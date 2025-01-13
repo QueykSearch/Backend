@@ -7,6 +7,7 @@ export interface UserEntity {
   email: string;
   roles: string[]; // Ejemplo: ['admin', 'user']
   fechaRegistro?: Date;
-  ultimoLogin?: Date;
+  // ultimoLogin?: Date;
+  history?: string[];
   // Otras propiedades que consideres necesarias
 }

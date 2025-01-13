@@ -2,18 +2,18 @@
 
 import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
 import { UserEntity } from "../../domain/entities/UserEntity";
-import { model, Schema, Document } from "mongoose";
+import mongoose, { model, Schema, Document } from "mongoose";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 
 /**
  * Definición del Schema de Mongoose para Usuario.
  */
-const UserSchema = new Schema({
+const UserSchema = new Schema<UserDocument>({
   nombreCompleto: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  roles: { type: [String], default: ["user"] },
+  roles: { type: [String], required: true },
   fechaRegistro: { type: Date, default: Date.now },
-  ultimoLogin: { type: Date },
+  history: { type: [String], default: [] }, // Nuevo campo
 });
 
 export interface UserDocument extends UserEntity, Document {
@@ -120,5 +120,52 @@ export class MongoUserRepository implements UserRepositoryPort {
       console.error("Error al eliminar Usuario por ID:", error);
       throw error;
     }
+  }
+
+  public async addToHistory(
+    userId: string,
+    ttId: string,
+    maxLength: number
+  ): Promise<void> {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error("ID de usuario inválido");
+    }
+
+    // Actualizar el historial:
+    // 1. Eliminar ttId si ya existe
+    // 2. Agregar ttId al inicio
+    // 3. Limitar el arreglo a maxLength elementos
+    await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $pull: { history: ttId },
+      },
+      { new: true }
+    );
+
+    await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $push: { history: { $each: [ttId], $position: 0 } },
+      },
+      { new: true }
+    );
+
+    await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $push: { history: { $each: [], $slice: maxLength } },
+      },
+      { new: true }
+    );
+  }
+
+  public async getHistory(userId: string): Promise<string[]> {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error("ID de usuario inválido");
+    }
+
+    const user = await UserModel.findById(userId).select("history").exec();
+    return user?.history || [];
   }
 }
