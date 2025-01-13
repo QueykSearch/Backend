@@ -8,7 +8,7 @@ export class SemanticSearchUseCase {
     private readonly embeddingService: EmbeddingService
   ) {}
 
-  public async execute(query: string): Promise<TTEntity[]> {
+  public async execute(query: string, limit: number): Promise<TTEntity[]> {
     // 1. Generar embedding de la query
     const embedding = await this.embeddingService.generateEmbedding(query);
     if (!embedding) {
@@ -17,6 +17,6 @@ export class SemanticSearchUseCase {
     }
 
     // 2. Búsqueda en el repositorio
-    return await this.ttRepository.findBySemanticQuery(embedding);
+    return await this.ttRepository.findBySemanticQuery(embedding, limit);
   }
 }

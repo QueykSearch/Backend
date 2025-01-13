@@ -279,8 +279,11 @@ export class TTController {
         res.status(400).json({ message: "Falta 'query' en los query params" });
         return;
       }
-
-      const results = await this.semanticSearchUseCase.execute(queryString);
+      const limit = req.query.limit ? Number(req.query.limit) : 6;
+      const results = await this.semanticSearchUseCase.execute(
+        queryString,
+        limit
+      );
       res.json({
         message: "Resultados semánticos",
         data: results,

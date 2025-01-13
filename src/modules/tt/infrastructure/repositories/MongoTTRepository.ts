@@ -160,7 +160,10 @@ export class MongoTTRepository implements TTRepositoryPort {
     }
   }
 
-  public async findBySemanticQuery(embedding: number[]): Promise<TTEntity[]> {
+  public async findBySemanticQuery(
+    embedding: number[],
+    limit: number
+  ): Promise<TTEntity[]> {
     // MongoDB Aggregation pipeline con $vectorSearch
     // Nombre del índice: "vector_index_resumen" (debes configurarlo en Atlas)
     const pipeline = [
@@ -170,7 +173,7 @@ export class MongoTTRepository implements TTRepositoryPort {
           path: "plot_embedding",
           queryVector: embedding,
           numCandidates: 50, // Ajusta según quieras
-          limit: 2,
+          limit: limit,
         },
       },
     ];
