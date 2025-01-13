@@ -1,5 +1,6 @@
 // src/modules/tt/infrastructure/repositories/MongoTTRepository.ts
 
+import { stat } from "fs";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
 import { TTEntity } from "../../domain/entities/TTEntity";
@@ -176,6 +177,11 @@ export class MongoTTRepository implements TTRepositoryPort {
           limit: limit,
         },
       },
+      {
+        $match: {
+          status: "aprobado",
+        },
+      },
     ];
 
     // Convertir cada documento en TTEntity
@@ -196,7 +202,8 @@ export class MongoTTRepository implements TTRepositoryPort {
       resumen: doc.resumen,
       documentoUrl: doc.documentoUrl,
       fechaPublicacion: doc.fechaPublicacion,
-      plot_embedding: doc.plot_embedding,
+      // plot_embedding: doc.plot_embedding,
+      status: doc.status,
     }));
   }
 
