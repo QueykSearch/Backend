@@ -31,5 +31,6 @@ export interface TTRepositoryPort {
 
   findBySemanticQuery(embedding: number[], limit: number): Promise<TTEntity[]>;
 
+  getMultipleTTs(ttIds: string[]): Promise<TTEntity[]>;
   // downloadTT(id: string): Promise<{ filename: string }>;
 }

@@ -207,5 +207,27 @@ export class MongoTTRepository implements TTRepositoryPort {
     }));
   }
 
+  /**
+   * Obtiene múltiples TT's dado un arreglo de IDs.
+   * @param ttIds - Array de IDs de TT's
+   * @returns Array de TTEntity
+   */
+  public async getMultipleTTs(ttIds: string[]): Promise<TTEntity[]> {
+    if (!Array.isArray(ttIds)) {
+      throw new Error("ttIds debe ser un arreglo de strings");
+    }
+
+    // Validar que todos los ttIds sean strings válidos (opcional pero recomendado)
+    const validTTIds = ttIds.filter(
+      (id) => typeof id === "string" && id.trim() !== ""
+    );
+    if (validTTIds.length === 0) {
+      throw new Error("No se proporcionaron TT IDs válidos");
+    }
+
+    const tts = await TTModel.find({ _id: { $in: validTTIds } }).exec();
+    return tts;
+  }
+
   // Otros métodos como findTTsByQuery, etc.
 }

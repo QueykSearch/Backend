@@ -13,6 +13,7 @@ import { ExtractMetadataUseCase } from "../application/useCases/ExtractMetadataU
 import { MetadataExtractorService } from "./services/MetadataExtractorService";
 import { ApproveTTUseCase } from "../application/useCases/ApproveTTUseCase";
 import { RejectTTUseCase } from "../application/useCases/RejectTTUseCase";
+import { GetMultipleTTsUseCase } from "../application/useCases/GetMultipleTTsUseCase";
 // import { DeepPartial } from '../../../shared/types/DeepPartial';
 
 // 1. Instancia del repositorio (Mongo)
@@ -27,6 +28,7 @@ const updateTTUseCase = new UpdateTTUseCase(ttRepository, embeddingService);
 const deleteTTUseCase = new DeleteTTUseCase(ttRepository);
 const approveTTUseCase = new ApproveTTUseCase(ttRepository);
 const rejectTTUseCase = new RejectTTUseCase(ttRepository);
+const getMultipleTTsUseCase = new GetMultipleTTsUseCase(ttRepository);
 
 const semanticSearchUseCase = new SemanticSearchUseCase(
   ttRepository,
@@ -48,6 +50,7 @@ const controller = new TTController(
   deleteTTUseCase,
   approveTTUseCase,
   rejectTTUseCase,
+  getMultipleTTsUseCase,
   googleCloudService,
   semanticSearchUseCase,
   extractMetadataUseCase
@@ -69,4 +72,5 @@ export const ttController = {
   extractMetadata: controller.extractMetadata,
   approveTT: controller.approveTT,
   rejectTT: controller.rejectTT,
+  getMultipleTTs: controller.getMultipleTTs,
 };

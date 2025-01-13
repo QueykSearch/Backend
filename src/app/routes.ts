@@ -29,6 +29,7 @@ router.post(
   ttController.createTT,
   ttController.extractMetadata
 );
+router.post("/tts/multiple", ttController.getMultipleTTs);
 router.post("/tts", ttController.createTT, ttController.createTTHandler);
 router.get("/tts", ttController.listTT);
 router.get("/tts/:ttId", ttController.getTTById);

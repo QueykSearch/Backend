@@ -13,7 +13,7 @@ import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearch
 import { ExtractMetadataUseCase } from "../../application/useCases/ExtractMetadataUseCase";
 import { ApproveTTUseCase } from "../../application/useCases/ApproveTTUseCase";
 import { RejectTTUseCase } from "../../application/useCases/RejectTTUseCase";
-import { stat } from "fs";
+import { GetMultipleTTsUseCase } from "../../application/useCases/GetMultipleTTsUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -27,6 +27,7 @@ export class TTController {
     private readonly deleteTTUseCase: DeleteTTUseCase,
     private readonly approveTTUseCase: ApproveTTUseCase,
     private readonly rejectTTUseCase: RejectTTUseCase,
+    private readonly getMultipleTTsUseCase: GetMultipleTTsUseCase,
     private readonly googleCloudService: GoogleCloudStorageService,
     private readonly semanticSearchUseCase: SemanticSearchUseCase,
     private readonly extractMetadataUseCase: ExtractMetadataUseCase
@@ -363,6 +364,37 @@ export class TTController {
         data: updated,
       });
     } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /tts/multiple
+   * Obtiene detalles de múltiples TT's dado un arreglo de IDs.
+   */
+  public getMultipleTTs = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttIds } = req.body;
+
+      if (!ttIds || !Array.isArray(ttIds)) {
+        res.status(400).json({
+          message:
+            "Se requiere un arreglo de TT IDs en el cuerpo de la solicitud",
+        });
+        return;
+      }
+
+      const tts = await this.getMultipleTTsUseCase.execute(ttIds);
+
+      res.status(200).json({
+        message: "TT's obtenidos con éxito",
+        data: tts,
+      });
+    } catch (error: any) {
       next(error);
     }
   };
