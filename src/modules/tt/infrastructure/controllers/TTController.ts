@@ -116,7 +116,9 @@ export class TTController {
         resumen: body.resumen,
         documentoUrl: fileUrl || "", // Guardamos la URL
         filename: file ? file.originalname : "",
-        fechaPublicacion: new Date(),
+        fechaPublicacion: body.fechaPublicacion
+          ? new Date(body.fechaPublicacion)
+          : new Date(),
 
         createdBy: body.createdBy, // <-- Recibido del frontend
         status: body.status || "pendiente",
