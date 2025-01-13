@@ -13,6 +13,7 @@ import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearch
 import { ExtractMetadataUseCase } from "../../application/useCases/ExtractMetadataUseCase";
 import { ApproveTTUseCase } from "../../application/useCases/ApproveTTUseCase";
 import { RejectTTUseCase } from "../../application/useCases/RejectTTUseCase";
+import { stat } from "fs";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -154,6 +155,7 @@ export class TTController {
 
         // nuevo:
         createdBy: (req.query.createdBy as string) || undefined,
+        status: (req.query.status as string) || undefined,
       };
 
       const result = await this.listTTUseCase.execute(filters);

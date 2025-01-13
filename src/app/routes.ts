@@ -24,13 +24,19 @@ export const router = Router();
 // router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
 
 router.get("/tts/semantic", ttController.searchSemanticTT);
-router.post("/tts/metadata",ttController.createTT,ttController.extractMetadata);
+router.post(
+  "/tts/metadata",
+  ttController.createTT,
+  ttController.extractMetadata
+);
 router.post("/tts", ttController.createTT, ttController.createTTHandler);
 router.get("/tts", ttController.listTT);
 router.get("/tts/:ttId", ttController.getTTById);
 router.put("/tts/:ttId", ttController.updateTT);
 router.delete("/tts/:ttId", ttController.deleteTT);
 router.get("/tts/:ttId/download", ttController.downloadTT);
+router.patch("/tts/:ttId/approve", ttController.approveTT);
+router.patch("/tts/:ttId/reject", ttController.rejectTT);
 
 // Rutas específicas para el módulo Usuario
 router.post("/users", userController.createUser); // Registro de usuarios, podría estar protegido si solo admins pueden crear usuarios

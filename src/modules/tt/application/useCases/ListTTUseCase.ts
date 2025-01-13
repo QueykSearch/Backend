@@ -20,6 +20,7 @@ export class ListTTUseCase {
     palabrasClave?: string[];
     anoPublicacion?: number;
     createdBy?: string; // <--
+    status?: string; // <--
     limit?: number;
     page?: number;
   }): Promise<{

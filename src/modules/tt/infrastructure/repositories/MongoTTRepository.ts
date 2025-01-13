@@ -62,6 +62,7 @@ export class MongoTTRepository implements TTRepositoryPort {
     palabrasClave?: string[];
     anoPublicacion?: number;
     createdBy?: string;
+    status?: string;
     limit?: number;
     page?: number;
   }): Promise<{
@@ -78,6 +79,7 @@ export class MongoTTRepository implements TTRepositoryPort {
       palabrasClave,
       anoPublicacion,
       createdBy,
+      status,
       limit = 10,
       page = 1,
     } = filters;
@@ -101,6 +103,10 @@ export class MongoTTRepository implements TTRepositoryPort {
 
     if (createdBy) {
       query.createdBy = createdBy;
+    }
+
+    if (status) {
+      query.status = status;
     }
 
     const skip = (page - 1) * limit;
