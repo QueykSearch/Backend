@@ -45,7 +45,7 @@ export class MetadataExtractorService {
           },
           { role: "user", content: prompt },
         ],
-        max_tokens: 500,
+        max_tokens: 3000,
       });
 
       let metadata = {

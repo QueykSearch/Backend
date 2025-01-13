@@ -1,4 +1,6 @@
 // Backend/src/shared/types/DeepPartial.ts
+// src/shared/types/DeepPartial.ts
+
 /**
  * Tipo que permite hacer partial (opcional) de manera recursiva.
  */
@@ -247,13 +249,20 @@ export const router = Router();
 // router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
 
 router.get("/tts/semantic", ttController.searchSemanticTT);
-router.post("/tts/metadata",ttController.createTT,ttController.extractMetadata);
+router.post(
+  "/tts/metadata",
+  ttController.createTT,
+  ttController.extractMetadata
+);
+router.post("/tts/multiple", ttController.getMultipleTTs);
 router.post("/tts", ttController.createTT, ttController.createTTHandler);
 router.get("/tts", ttController.listTT);
 router.get("/tts/:ttId", ttController.getTTById);
 router.put("/tts/:ttId", ttController.updateTT);
 router.delete("/tts/:ttId", ttController.deleteTT);
 router.get("/tts/:ttId/download", ttController.downloadTT);
+router.patch("/tts/:ttId/approve", ttController.approveTT);
+router.patch("/tts/:ttId/reject", ttController.rejectTT);
 
 // Rutas específicas para el módulo Usuario
 router.post("/users", userController.createUser); // Registro de usuarios, podría estar protegido si solo admins pueden crear usuarios
@@ -264,11 +273,36 @@ router.delete("/users/:userId", userController.deleteUser);
 router.post("/refresh-token", userController.refreshToken); // Opcional: Ruta de refresco de token
 router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
 router.post("/login-with-token", userController.loginUserWithToken); // Opcional: Ruta de login con token
+router.post("/users/:userId/history", userController.addTTToHistory);
+router.get("/users/:userId/history", userController.getUserHistory);
 
 // Ruta de prueba para verificar que las rutas están funcionando
 router.get("/test", (req, res) => {
   res.send("Ruta de test funcionando correctamente");
 });
+
+
+
+// Backend/src/modules/user/application/useCases/GetUserHistoryUseCase.ts
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+
+export class GetUserHistoryUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para obtener el historial de TT's de un usuario.
+   * @param userId - ID del usuario
+   * @returns Array de IDs de TT's
+   */
+  public async execute(userId: string): Promise<string[]> {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+
+    const history = await this.userRepository.getHistory(userId);
+    return history;
+  }
+}
 
 
 
@@ -329,6 +363,33 @@ export class GetUserByIdUseCase {
    */
   public async execute(id: string): Promise<UserEntity | null> {
     return await this.userRepository.findUserById(id);
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/AddTTToHistoryUseCase.ts
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+
+export class AddTTToHistoryUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para agregar un TT al historial del usuario.
+   * @param userId - ID del usuario
+   * @param ttId - ID del TT visitado
+   * @param maxLength - Máximo de TT's en el historial (por defecto 45)
+   */
+  public async execute(
+    userId: string,
+    ttId: string,
+    maxLength: number = 45
+  ): Promise<void> {
+    if (!userId || !ttId) {
+      throw new Error("User ID and TT ID are required");
+    }
+
+    await this.userRepository.addToHistory(userId, ttId, maxLength);
   }
 }
 
@@ -644,37 +705,62 @@ export interface UserEntity {
   email: string;
   roles: string[]; // Ejemplo: ['admin', 'user']
   fechaRegistro?: Date;
-  ultimoLogin?: Date;
+  // ultimoLogin?: Date;
+  history?: string[];
   // Otras propiedades que consideres necesarias
 }
 
 
 
 // Backend/src/modules/user/domain/UserRepositoryPort.ts
-import { UserEntity } from './entities/UserEntity';
-import { DeepPartial } from '../../../shared/types/DeepPartial';
+import { UserEntity } from "./entities/UserEntity";
+import { DeepPartial } from "../../../shared/types/DeepPartial";
 
 /**
  * Puerto (interfaz) que define las operaciones del repositorio de Usuarios.
  */
 export interface UserRepositoryPort {
   createUser(user: UserEntity): Promise<UserEntity>;
-  
+
   listUsers(filters: {
     nombreCompleto?: string;
     email?: string;
     role?: string;
     limit?: number;
     page?: number;
-  }): Promise<{ total: number; page: number; limit: number; data: UserEntity[] }>;
-  
+  }): Promise<{
+    total: number;
+    page: number;
+    limit: number;
+    data: UserEntity[];
+  }>;
+
   findUserById(id: string): Promise<UserEntity | null>;
-  
+
   findUserByEmail(email: string): Promise<UserEntity | null>;
-  
-  updateUserById(id: string, updateData: DeepPartial<UserEntity>): Promise<UserEntity | null>;
-  
+
+  updateUserById(
+    id: string,
+    updateData: DeepPartial<UserEntity>
+  ): Promise<UserEntity | null>;
+
   deleteUserById(id: string): Promise<{ deletedCount: number }>;
+
+  /**
+   * Agrega un TT al historial del usuario, manteniendo un máximo de `maxLength` TTs.
+   * Si el TT ya está en el historial, lo mueve al inicio.
+   * @param userId - ID del usuario
+   * @param ttId - ID del TT visitado
+   * @param maxLength - Máximo de TT's en el historial
+   */
+  addToHistory(userId: string, ttId: string, maxLength: number): Promise<void>;
+
+  /**
+   * Obtiene el historial de TT's de un usuario.
+   * @param userId - ID del usuario
+   * @returns Array de IDs de TT's
+   */
+  getHistory(userId: string): Promise<string[]>;
 }
 
 
@@ -682,24 +768,27 @@ export interface UserRepositoryPort {
 // Backend/src/modules/user/infrastructure/controllers/UserController.ts
 // src/modules/user/infrastructure/controllers/UserController.ts
 
-import {Request, Response, NextFunction} from "express";
-import {CreateUserUseCase} from "../../application/useCases/CreateUserUseCase";
-import {ListUsersUseCase} from "../../application/useCases/ListUsersUseCase";
-import {GetUserByIdUseCase} from "../../application/useCases/GetUserByIdUseCase";
-import {UpdateUserUseCase} from "../../application/useCases/UpdateUserUseCase";
-import {DeleteUserUseCase} from "../../application/useCases/DeleteUserUseCase";
+import { Request, Response, NextFunction } from "express";
+import { CreateUserUseCase } from "../../application/useCases/CreateUserUseCase";
+import { ListUsersUseCase } from "../../application/useCases/ListUsersUseCase";
+import { GetUserByIdUseCase } from "../../application/useCases/GetUserByIdUseCase";
+import { UpdateUserUseCase } from "../../application/useCases/UpdateUserUseCase";
+import { DeleteUserUseCase } from "../../application/useCases/DeleteUserUseCase";
 // import { AuthService } from '../services/AuthService';
-import {CreateUserDTO} from "../dtos/CreateUserDTO";
-import {UpdateUserDTO} from "../dtos/UpdateUserDTO";
-import {DeepPartial} from "../../../../shared/types/DeepPartial";
-import {UserEntity} from "../../domain/entities/UserEntity";
-import {createUserSchema} from "../validators/CreateUserValidator";
-import {updateUserSchema} from "../validators/UpdateUserValidator";
-import {supabaseClient} from "../../../../shared/db/SupabaseClient";
-import {AuthResponse, AuthTokenResponsePassword} from "@supabase/supabase-js";
-import {LoginUserUseCase} from "../../application/useCases/LoginUserUseCase";
-import {RefreshUserTokenUseCase} from "../../application/useCases/RefreshUserTokenUseCase";
-import {LoginUserWithTokenUseCase} from "../../application/useCases/LoginUserWithTokenUseCase";
+import { CreateUserDTO } from "../dtos/CreateUserDTO";
+import { UpdateUserDTO } from "../dtos/UpdateUserDTO";
+import { DeepPartial } from "../../../../shared/types/DeepPartial";
+import { UserEntity } from "../../domain/entities/UserEntity";
+import { createUserSchema } from "../validators/CreateUserValidator";
+import { updateUserSchema } from "../validators/UpdateUserValidator";
+import { supabaseClient } from "../../../../shared/db/SupabaseClient";
+import { AuthResponse, AuthTokenResponsePassword } from "@supabase/supabase-js";
+import { LoginUserUseCase } from "../../application/useCases/LoginUserUseCase";
+import { RefreshUserTokenUseCase } from "../../application/useCases/RefreshUserTokenUseCase";
+import { LoginUserWithTokenUseCase } from "../../application/useCases/LoginUserWithTokenUseCase";
+
+import { GetUserHistoryUseCase } from "../../application/useCases/GetUserHistoryUseCase";
+import { AddTTToHistoryUseCase } from "../../application/useCases/AddTTToHistoryUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con Usuarios.
@@ -713,10 +802,10 @@ export class UserController {
     private readonly deleteUserUseCase: DeleteUserUseCase,
     private readonly loginUserUseCase: LoginUserUseCase,
     private readonly refreshUserTokenUseCase: RefreshUserTokenUseCase,
-    private readonly loginUserWithTokenUseCase: LoginUserWithTokenUseCase
-  ) // private readonly authService: AuthService
-  {
-  }
+    private readonly loginUserWithTokenUseCase: LoginUserWithTokenUseCase,
+    private readonly getUserHistoryUseCase: GetUserHistoryUseCase,
+    private readonly addTTToHistoryUseCase: AddTTToHistoryUseCase
+  ) {}
 
   /**
    * Maneja la creación de un nuevo Usuario.
@@ -728,11 +817,11 @@ export class UserController {
   ): Promise<void> => {
     try {
       // Validar los datos del body
-      const {error, value} = createUserSchema.validate(req.body);
+      const { error, value } = createUserSchema.validate(req.body);
       if (error) {
         res
           .status(400)
-          .json({message: "Datos inválidos", details: error.details});
+          .json({ message: "Datos inválidos", details: error.details });
         return;
       }
 
@@ -748,7 +837,7 @@ export class UserController {
     } catch (error: any) {
       // Manejo de errores específicos
       if (error.message === "El email ya está en uso") {
-        res.status(409).json({message: error.message});
+        res.status(409).json({ message: error.message });
         return;
       }
       next(error);
@@ -792,17 +881,17 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const {userId} = req.params;
+      const { userId } = req.params;
 
       if (!userId) {
-        res.status(400).json({message: "userId es requerido"});
+        res.status(400).json({ message: "userId es requerido" });
         return;
       }
 
       const user = await this.getUserByIdUseCase.execute(userId);
 
       if (!user) {
-        res.status(404).json({message: "Usuario no encontrado"});
+        res.status(404).json({ message: "Usuario no encontrado" });
         return;
       }
 
@@ -824,20 +913,20 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const {userId} = req.params;
+      const { userId } = req.params;
       const updateData: UpdateUserDTO = req.body;
 
       if (!userId) {
-        res.status(400).json({message: "userId es requerido"});
+        res.status(400).json({ message: "userId es requerido" });
         return;
       }
 
       // Validar los datos de actualización
-      const {error, value} = updateUserSchema.validate(updateData);
+      const { error, value } = updateUserSchema.validate(updateData);
       if (error) {
         res
           .status(400)
-          .json({message: "Datos inválidos", details: error.details});
+          .json({ message: "Datos inválidos", details: error.details });
         return;
       }
 
@@ -847,7 +936,7 @@ export class UserController {
       );
 
       if (!updatedUser) {
-        res.status(404).json({message: "Usuario no encontrado"});
+        res.status(404).json({ message: "Usuario no encontrado" });
         return;
       }
 
@@ -857,7 +946,7 @@ export class UserController {
       });
     } catch (error: any) {
       if (error.message === "El email ya está en uso") {
-        res.status(409).json({message: error.message});
+        res.status(409).json({ message: error.message });
         return;
       }
       next(error);
@@ -873,17 +962,17 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const {userId} = req.params;
+      const { userId } = req.params;
 
       if (!userId) {
-        res.status(400).json({message: "userId es requerido"});
+        res.status(400).json({ message: "userId es requerido" });
         return;
       }
 
       const deleted = await this.deleteUserUseCase.execute(userId);
 
       if (!deleted) {
-        res.status(404).json({message: "Usuario no encontrado"});
+        res.status(404).json({ message: "Usuario no encontrado" });
         return;
       }
 
@@ -901,14 +990,16 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const {refreshToken} = req.body;
+      const { refreshToken } = req.body;
 
       if (!refreshToken) {
-        res.status(400).json({message: "refreshToken es requerido"});
+        res.status(400).json({ message: "refreshToken es requerido" });
         return;
       }
 
-      res.status(200).json(await this.refreshUserTokenUseCase.execute(req.body));
+      res
+        .status(200)
+        .json(await this.refreshUserTokenUseCase.execute(req.body));
     } catch (error) {
       next(error);
     }
@@ -920,10 +1011,12 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const {accessToken, refreshToken, expiresAt} = req.body;
+      const { accessToken, refreshToken, expiresAt } = req.body;
 
       if (!accessToken || !refreshToken || !expiresAt) {
-        res.status(400).json({message: "accessToken, refreshToken y expiresAt son requeridos"});
+        res.status(400).json({
+          message: "accessToken, refreshToken y expiresAt son requeridos",
+        });
         return;
       }
 
@@ -933,12 +1026,12 @@ export class UserController {
       });
     } catch (error: any) {
       if (error.message === "Credenciales inválidas") {
-        res.status(401).json({message: error.message});
+        res.status(401).json({ message: error.message });
         return;
       }
       next(error);
     }
-  }
+  };
 
   /**
    * (Opcional) Maneja el inicio de sesión de un Usuario.
@@ -950,10 +1043,10 @@ export class UserController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const {email, password} = req.body;
+      const { email, password } = req.body;
 
       if (!email || !password) {
-        res.status(400).json({message: "Email y contraseña son requeridos"});
+        res.status(400).json({ message: "Email y contraseña son requeridos" });
         return;
       }
 
@@ -963,9 +1056,65 @@ export class UserController {
       });
     } catch (error: any) {
       if (error.message === "Credenciales inválidas") {
-        res.status(401).json({message: error.message});
+        res.status(401).json({ message: error.message });
         return;
       }
+      next(error);
+    }
+  };
+
+  /**
+   * GET /users/:userId/history
+   * Obtiene el historial de TT's del usuario autenticado.
+   */
+  public getHistory = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { userId } = req.params;
+
+      if (!userId) {
+        res.status(400).json({ message: "userId es requerido" });
+        return;
+      }
+
+      const history = await this.getUserHistoryUseCase.execute(userId);
+
+      res.status(200).json({
+        message: "Historial obtenido con éxito",
+        data: history,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /user/:userID/history
+   * Registra la visita de un usuario a un TT. el user ID se manda como parámetro en la URL. y el TT ID se manda en el body.
+   */
+  public recordTTVisit = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const { ttId } = req.body;
+
+      if (!userId || !ttId) {
+        res.status(400).json({ message: "userId y ttId son requeridos" });
+        return;
+      }
+
+      await this.addTTToHistoryUseCase.execute(userId, ttId);
+
+      res.status(200).json({
+        message: "Visita registrada con éxito",
+      });
+    } catch (error: any) {
       next(error);
     }
   };
@@ -1027,18 +1176,18 @@ export interface CreateUserDTO {
 
 import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
 import { UserEntity } from "../../domain/entities/UserEntity";
-import { model, Schema, Document } from "mongoose";
+import mongoose, { model, Schema, Document } from "mongoose";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 
 /**
  * Definición del Schema de Mongoose para Usuario.
  */
-const UserSchema = new Schema({
+const UserSchema = new Schema<UserDocument>({
   nombreCompleto: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  roles: { type: [String], default: ["user"] },
+  roles: { type: [String], required: true },
   fechaRegistro: { type: Date, default: Date.now },
-  ultimoLogin: { type: Date },
+  history: { type: [String], default: [] }, // Nuevo campo
 });
 
 export interface UserDocument extends UserEntity, Document {
@@ -1146,6 +1295,53 @@ export class MongoUserRepository implements UserRepositoryPort {
       throw error;
     }
   }
+
+  public async addToHistory(
+    userId: string,
+    ttId: string,
+    maxLength: number
+  ): Promise<void> {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error("ID de usuario inválido");
+    }
+
+    // Actualizar el historial:
+    // 1. Eliminar ttId si ya existe
+    // 2. Agregar ttId al inicio
+    // 3. Limitar el arreglo a maxLength elementos
+    await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $pull: { history: ttId },
+      },
+      { new: true }
+    );
+
+    await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $push: { history: { $each: [ttId], $position: 0 } },
+      },
+      { new: true }
+    );
+
+    await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $push: { history: { $each: [], $slice: maxLength } },
+      },
+      { new: true }
+    );
+  }
+
+  public async getHistory(userId: string): Promise<string[]> {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error("ID de usuario inválido");
+    }
+
+    const user = await UserModel.findById(userId).select("history").exec();
+    return user?.history || [];
+  }
 }
 
 
@@ -1188,16 +1384,21 @@ export const createUserSchema = Joi.object<CreateUserDTO>({
 // Backend/src/modules/user/infrastructure/index.ts
 // src/modules/user/infrastructure/index.ts
 
-import {MongoUserRepository} from "./repositories/MongoUserRepository";
-import {CreateUserUseCase} from "../application/useCases/CreateUserUseCase";
-import {ListUsersUseCase} from "../application/useCases/ListUsersUseCase";
-import {GetUserByIdUseCase} from "../application/useCases/GetUserByIdUseCase";
-import {UpdateUserUseCase} from "../application/useCases/UpdateUserUseCase";
-import {DeleteUserUseCase} from "../application/useCases/DeleteUserUseCase";
-import {UserController} from "./controllers/UserController";
-import {LoginUserUseCase} from "../application/useCases/LoginUserUseCase";
-import {LoginUserWithTokenUseCase} from "../application/useCases/LoginUserWithTokenUseCase";
-import {RefreshUserTokenUseCase} from "../application/useCases/RefreshUserTokenUseCase";
+import { MongoUserRepository } from "./repositories/MongoUserRepository";
+import { CreateUserUseCase } from "../application/useCases/CreateUserUseCase";
+import { ListUsersUseCase } from "../application/useCases/ListUsersUseCase";
+import { GetUserByIdUseCase } from "../application/useCases/GetUserByIdUseCase";
+import { UpdateUserUseCase } from "../application/useCases/UpdateUserUseCase";
+import { DeleteUserUseCase } from "../application/useCases/DeleteUserUseCase";
+import { UserController } from "./controllers/UserController";
+import { LoginUserUseCase } from "../application/useCases/LoginUserUseCase";
+import { LoginUserWithTokenUseCase } from "../application/useCases/LoginUserWithTokenUseCase";
+import { RefreshUserTokenUseCase } from "../application/useCases/RefreshUserTokenUseCase";
+import { AddTTToHistoryUseCase } from "../application/useCases/AddTTToHistoryUseCase";
+import { GetUserHistoryUseCase } from "../application/useCases/GetUserHistoryUseCase";
+// import { GetTTByIdUseCase } from "../../tt/application/useCases/GetTTByIdUseCase";
+// import { GetUserByIdUseCase } from "../application/useCases/GetUserByIdUseCase"; // Opcional
+
 // import { AuthService } from './services/AuthService'; // Opcional si Auth0 maneja todo
 
 // 1. Instancia del repositorio (Mongo)
@@ -1211,7 +1412,13 @@ const updateUserUseCase = new UpdateUserUseCase(userRepository);
 const deleteUserUseCase = new DeleteUserUseCase(userRepository);
 const loginUserUseCase = new LoginUserUseCase(userRepository); // Opcional: Método de login
 const refreshUserTokenUseCase = new RefreshUserTokenUseCase(userRepository); // Opcional: Método de refresco de token
-const loginUserWithTokenUseCase = new LoginUserWithTokenUseCase(userRepository, refreshUserTokenUseCase); // Opcional: Método de login con token
+const loginUserWithTokenUseCase = new LoginUserWithTokenUseCase(
+  userRepository,
+  refreshUserTokenUseCase
+); // Opcional: Método de login con token
+
+const addTTToHistoryUseCase = new AddTTToHistoryUseCase(userRepository);
+const getUserHistoryUseCase = new GetUserHistoryUseCase(userRepository);
 
 // 3. Instancia del servicio de autenticación
 // const authService = new AuthService(userRepository); // Opcional
@@ -1225,7 +1432,10 @@ const controller = new UserController(
   deleteUserUseCase,
   loginUserUseCase,
   refreshUserTokenUseCase,
-  loginUserWithTokenUseCase
+  loginUserWithTokenUseCase,
+  // GetUserByIdUseCase,
+  getUserHistoryUseCase,
+  addTTToHistoryUseCase
 );
 
 // 5. Exportar el controlador con los métodos
@@ -1238,6 +1448,8 @@ export const userController = {
   refreshToken: controller.refreshToken, // Opcional: Método de refresco de token
   loginUserWithToken: controller.loginUserWithToken,
   loginUser: controller.loginUser, // Opcional: Método de login
+  getUserHistory: controller.getHistory,
+  addTTToHistory: controller.recordTTVisit,
 };
 
 
@@ -1245,7 +1457,7 @@ export const userController = {
 // Backend/src/modules/tt/application/useCases/CreateTTUseCase.ts
 import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
 import { TTEntity } from "../../domain/entities/TTEntity";
-import { EmbeddingService } from "../../../tt/infrastructure/services/EmbeddingService";
+import { EmbeddingService } from "../..//infrastructure/services/EmbeddingService";
 
 export class CreateTTUseCase {
   constructor(
@@ -1254,25 +1466,72 @@ export class CreateTTUseCase {
   ) {}
 
   public async execute(ttData: TTEntity): Promise<TTEntity> {
-    // Validaciones iniciales
+    // Asegurarnos de tener título (si te interesa validar más campos, hazlo aquí)
     if (!ttData.titulo) {
       throw new Error("El título no puede estar vacío");
     }
 
-    // 1. Generar embedding para "resumen"
+    // Asignar status por defecto si no viene
+    if (!ttData.status) {
+      ttData.status = "pendiente";
+    }
+
+    // Generar embedding para "resumen"
     let embedding: number[] | null = null;
     if (ttData.resumen) {
       embedding = await this.embeddingService.generateEmbedding(ttData.resumen);
     }
 
-    // 2. Asignar el embedding en la entidad (ej: campo "plot_embedding")
-    //    pero ojo, tu TTEntity no lo tiene. Puedes ampliar TTEntity para un optional:
-    //    plot_embedding?: number[];
     (ttData as any).plot_embedding = embedding || [];
 
-    // 3. Llamamos al repositorio para guardar
+    // Guardar en el repositorio
     const newTT = await this.ttRepository.createTT(ttData);
     return newTT;
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/ApproveTTUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+
+/**
+ * Caso de uso para aprobar un TT (cambiar su status a "aprobado").
+ */
+export class ApproveTTUseCase {
+  constructor(private readonly ttRepository: TTRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para aprobar un TT.
+   * @param ttId - ID del TT
+   * @returns TTEntity actualizada o null si no se encuentra
+   */
+  public async execute(ttId: string): Promise<TTEntity | null> {
+    return this.ttRepository.updateTTById(ttId, { status: "aprobado" });
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/GetMultipleTTsUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+
+export class GetMultipleTTsUseCase {
+  constructor(private readonly ttRepository: TTRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para obtener múltiples TT's.
+   * @param ttIds - Array de IDs de TT's
+   * @returns Array de TTEntity
+   */
+  public async execute(ttIds: string[]): Promise<TTEntity[]> {
+    if (!ttIds || !Array.isArray(ttIds)) {
+      throw new Error("Se requiere un arreglo de TT IDs");
+    }
+
+    return await this.ttRepository.getMultipleTTs(ttIds);
   }
 }
 
@@ -1295,6 +1554,28 @@ export class DeleteTTUseCase {
   public async execute(id: string): Promise<boolean> {
     const result = await this.ttRepository.deleteTTById(id);
     return result.deletedCount > 0;
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/RejectTTUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+
+/**
+ * Caso de uso para rechazar un TT (cambiar su status a "rechazado").
+ */
+export class RejectTTUseCase {
+  constructor(private readonly ttRepository: TTRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para rechazar un TT.
+   * @param ttId - ID del TT
+   * @returns TTEntity actualizada o null si no se encuentra
+   */
+  public async execute(ttId: string): Promise<TTEntity | null> {
+    return this.ttRepository.updateTTById(ttId, { status: "rechazado" });
   }
 }
 
@@ -1333,7 +1614,7 @@ export class SemanticSearchUseCase {
     private readonly embeddingService: EmbeddingService
   ) {}
 
-  public async execute(query: string): Promise<TTEntity[]> {
+  public async execute(query: string, limit: number): Promise<TTEntity[]> {
     // 1. Generar embedding de la query
     const embedding = await this.embeddingService.generateEmbedding(query);
     if (!embedding) {
@@ -1342,7 +1623,7 @@ export class SemanticSearchUseCase {
     }
 
     // 2. Búsqueda en el repositorio
-    return await this.ttRepository.findBySemanticQuery(embedding);
+    return await this.ttRepository.findBySemanticQuery(embedding, limit);
   }
 }
 
@@ -1431,6 +1712,8 @@ export class ListTTUseCase {
     grado?: string;
     palabrasClave?: string[];
     anoPublicacion?: number;
+    createdBy?: string; // <--
+    status?: string; // <--
     limit?: number;
     page?: number;
   }): Promise<{
@@ -1439,7 +1722,7 @@ export class ListTTUseCase {
     limit: number;
     data: TTEntity[];
   }> {
-    return await this.ttRepository.listTT(filters);
+    return this.ttRepository.listTT(filters);
   }
 }
 
@@ -1469,6 +1752,9 @@ export interface TTEntity {
   filename?: string;
   fechaPublicacion?: Date;
   plot_embedding?: number[];
+
+  createdBy?: string;
+  status?: string;
   // Otras propiedades que requieras...
 }
 
@@ -1506,8 +1792,9 @@ export interface TTRepositoryPort {
 
   deleteTTById(id: string): Promise<{ deletedCount: number }>;
 
-  findBySemanticQuery(embedding: number[]): Promise<TTEntity[]>;
+  findBySemanticQuery(embedding: number[], limit: number): Promise<TTEntity[]>;
 
+  getMultipleTTs(ttIds: string[]): Promise<TTEntity[]>;
   // downloadTT(id: string): Promise<{ filename: string }>;
 }
 
@@ -1527,6 +1814,9 @@ import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTEntity } from "../../domain/entities/TTEntity";
 import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearchUseCase";
 import { ExtractMetadataUseCase } from "../../application/useCases/ExtractMetadataUseCase";
+import { ApproveTTUseCase } from "../../application/useCases/ApproveTTUseCase";
+import { RejectTTUseCase } from "../../application/useCases/RejectTTUseCase";
+import { GetMultipleTTsUseCase } from "../../application/useCases/GetMultipleTTsUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -1538,6 +1828,9 @@ export class TTController {
     private readonly getTTByIdUseCase: GetTTByIdUseCase,
     private readonly updateTTUseCase: UpdateTTUseCase,
     private readonly deleteTTUseCase: DeleteTTUseCase,
+    private readonly approveTTUseCase: ApproveTTUseCase,
+    private readonly rejectTTUseCase: RejectTTUseCase,
+    private readonly getMultipleTTsUseCase: GetMultipleTTsUseCase,
     private readonly googleCloudService: GoogleCloudStorageService,
     private readonly semanticSearchUseCase: SemanticSearchUseCase,
     private readonly extractMetadataUseCase: ExtractMetadataUseCase
@@ -1627,6 +1920,9 @@ export class TTController {
         documentoUrl: fileUrl || "", // Guardamos la URL
         filename: file ? file.originalname : "",
         fechaPublicacion: new Date(),
+
+        createdBy: body.createdBy, // <-- Recibido del frontend
+        status: body.status || "pendiente",
       });
 
       // Enviar la respuesta sin retornar
@@ -1660,6 +1956,10 @@ export class TTController {
           : undefined,
         limit: req.query.limit ? Number(req.query.limit) : 10,
         page: req.query.page ? Number(req.query.page) : 1,
+
+        // nuevo:
+        createdBy: (req.query.createdBy as string) || undefined,
+        status: (req.query.status as string) || undefined,
       };
 
       const result = await this.listTTUseCase.execute(filters);
@@ -1668,7 +1968,7 @@ export class TTController {
         message: "Lista de TTs obtenida con éxito",
         data: result,
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   };
@@ -1783,8 +2083,11 @@ export class TTController {
         res.status(400).json({ message: "Falta 'query' en los query params" });
         return;
       }
-
-      const results = await this.semanticSearchUseCase.execute(queryString);
+      const limit = req.query.limit ? Number(req.query.limit) : 6;
+      const results = await this.semanticSearchUseCase.execute(
+        queryString,
+        limit
+      );
       res.json({
         message: "Resultados semánticos",
         data: results,
@@ -1794,26 +2097,110 @@ export class TTController {
       next(error);
     }
   };
-  public extractMetadata=async(
-    req:Request,
-    res:Response,
-    next:NextFunction
-  ):Promise<void>=>{
+  public extractMetadata = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
-      const file = req.file
-      if(!file){
-        res.status(400).json({message:"Falta el pdf en el req"});
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ message: "Falta el pdf en el req" });
         return;
       }
-      const metadata = await this.extractMetadataUseCase.execute(file.buffer) 
+      const metadata = await this.extractMetadataUseCase.execute(file.buffer);
       res.json({
-        message:"Metadata Extraida Correctamente",
-        data:metadata
-      })
+        message: "Metadata Extraida Correctamente",
+        data: metadata,
+      });
     } catch (error) {
-      next(error)
+      next(error);
     }
-  }
+  };
+
+  /**
+   * Maneja la aprobación de un TT.
+   */
+  public approveTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      if (!ttId) {
+        res.status(400).json({ message: "Falta el TT ID" });
+        return;
+      }
+      const updated = await this.approveTTUseCase.execute(ttId);
+      if (!updated) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+      res.status(200).json({
+        message: "TT aprobado con éxito",
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public rejectTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      if (!ttId) {
+        res.status(400).json({ message: "Falta el TT ID" });
+        return;
+      }
+      const updated = await this.rejectTTUseCase.execute(ttId);
+      if (!updated) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+      res.status(200).json({
+        message: "TT rechazado con éxito",
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /tts/multiple
+   * Obtiene detalles de múltiples TT's dado un arreglo de IDs.
+   */
+  public getMultipleTTs = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttIds } = req.body;
+
+      if (!ttIds || !Array.isArray(ttIds)) {
+        res.status(400).json({
+          message:
+            "Se requiere un arreglo de TT IDs en el cuerpo de la solicitud",
+        });
+        return;
+      }
+
+      const tts = await this.getMultipleTTsUseCase.execute(ttIds);
+
+      res.status(200).json({
+        message: "TT's obtenidos con éxito",
+        data: tts,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
 }
 
 
@@ -1840,6 +2227,8 @@ export interface CreateTTDTO {
   // El documento se sube a GCloud; luego guardamos la URL:
   file?: Express.Multer.File;
   fechaPublicacion?: Date;
+  createdBy?: string;
+  status?: string;
 }
 
 
@@ -1907,6 +2296,7 @@ export interface UpdateTTDTO {
 // Backend/src/modules/tt/infrastructure/repositories/MongoTTRepository.ts
 // src/modules/tt/infrastructure/repositories/MongoTTRepository.ts
 
+import { stat } from "fs";
 import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
 import { TTEntity } from "../../domain/entities/TTEntity";
@@ -1936,7 +2326,11 @@ const TTSchema = new Schema({
   documentoUrl: { type: String, required: false },
   filename: { type: String, required: false },
   fechaPublicacion: { type: Date, default: Date.now },
-  plot_embedding: { type: [Number], default: [] }, // <-- Almacena array de floats
+  plot_embedding: { type: [Number], default: [] },
+
+  // Nuevo: campos para creador y status
+  createdBy: { type: String, required: false },
+  status: { type: String, default: "pendiente" },
 });
 
 export interface TTDocument extends TTEntity, Document {
@@ -1964,6 +2358,8 @@ export class MongoTTRepository implements TTRepositoryPort {
     grado?: string;
     palabrasClave?: string[];
     anoPublicacion?: number;
+    createdBy?: string;
+    status?: string;
     limit?: number;
     page?: number;
   }): Promise<{
@@ -1979,6 +2375,8 @@ export class MongoTTRepository implements TTRepositoryPort {
       grado,
       palabrasClave,
       anoPublicacion,
+      createdBy,
+      status,
       limit = 10,
       page = 1,
     } = filters;
@@ -1998,6 +2396,14 @@ export class MongoTTRepository implements TTRepositoryPort {
       const startDate = new Date(`${anoPublicacion}-01-01`);
       const endDate = new Date(`${anoPublicacion}-12-31`);
       query.fechaPublicacion = { $gte: startDate, $lte: endDate };
+    }
+
+    if (createdBy) {
+      query.createdBy = createdBy;
+    }
+
+    if (status) {
+      query.status = status;
     }
 
     const skip = (page - 1) * limit;
@@ -2051,7 +2457,10 @@ export class MongoTTRepository implements TTRepositoryPort {
     }
   }
 
-  public async findBySemanticQuery(embedding: number[]): Promise<TTEntity[]> {
+  public async findBySemanticQuery(
+    embedding: number[],
+    limit: number
+  ): Promise<TTEntity[]> {
     // MongoDB Aggregation pipeline con $vectorSearch
     // Nombre del índice: "vector_index_resumen" (debes configurarlo en Atlas)
     const pipeline = [
@@ -2061,7 +2470,12 @@ export class MongoTTRepository implements TTRepositoryPort {
           path: "plot_embedding",
           queryVector: embedding,
           numCandidates: 50, // Ajusta según quieras
-          limit: 2,
+          limit: limit,
+        },
+      },
+      {
+        $match: {
+          status: "aprobado",
         },
       },
     ];
@@ -2084,8 +2498,31 @@ export class MongoTTRepository implements TTRepositoryPort {
       resumen: doc.resumen,
       documentoUrl: doc.documentoUrl,
       fechaPublicacion: doc.fechaPublicacion,
-      plot_embedding: doc.plot_embedding,
+      // plot_embedding: doc.plot_embedding,
+      status: doc.status,
     }));
+  }
+
+  /**
+   * Obtiene múltiples TT's dado un arreglo de IDs.
+   * @param ttIds - Array de IDs de TT's
+   * @returns Array de TTEntity
+   */
+  public async getMultipleTTs(ttIds: string[]): Promise<TTEntity[]> {
+    if (!Array.isArray(ttIds)) {
+      throw new Error("ttIds debe ser un arreglo de strings");
+    }
+
+    // Validar que todos los ttIds sean strings válidos (opcional pero recomendado)
+    const validTTIds = ttIds.filter(
+      (id) => typeof id === "string" && id.trim() !== ""
+    );
+    if (validTTIds.length === 0) {
+      throw new Error("No se proporcionaron TT IDs válidos");
+    }
+
+    const tts = await TTModel.find({ _id: { $in: validTTIds } }).exec();
+    return tts;
   }
 
   // Otros métodos como findTTsByQuery, etc.
@@ -2173,7 +2610,7 @@ export class GoogleCloudStorageService {
   private bucket = storage.bucket(bucketName);
 
   public async uploadFile(file: Express.Multer.File): Promise<string> {
-    const fileName = Date.now() + "-" + file.originalname;
+    const fileName = file.originalname;
     const blob = this.bucket.file(fileName);
     const blobStream = blob.createWriteStream({
       metadata: {
@@ -2247,7 +2684,8 @@ export class MetadataExtractorService {
   async generarMetadata(pdfFile: Buffer | string): Promise<any> {
     try {
       // Leer el contenido del archivo PDF
-      const pdfBuffer = typeof pdfFile === "string" ? fs.readFileSync(pdfFile) : pdfFile;
+      const pdfBuffer =
+        typeof pdfFile === "string" ? fs.readFileSync(pdfFile) : pdfFile;
       const pdfData = await pdfParse(pdfBuffer);
 
       // Limitar el texto a un máximo de 5000 caracteres
@@ -2264,16 +2702,19 @@ export class MetadataExtractorService {
       - "directores": Un arreglo de objetos con "nombreCompleto" y opcionalmente "orcid".
       - "grado": El grado académico relacionado (Maestría, Licenciatura, Doctorado).
       - "resumen": Un breve resumen del documento (minimo de 100 palabras pero que este bien descrito) (es lo más importante ya que se usará para luego crear embeddings).
-      - "fechaPublicacion": La fecha de publicación (si está disponible).
+      - "fechaPublicacion": La fecha de publicación (si está disponible y en año unicamente, es decir, numero de 4 dígitos).
       Texto del documento:
       ---
       ${limitedText}
       ---
-      `;   
+      `;
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "Eres un modelo que extrae metadata académica." },
+          {
+            role: "system",
+            content: "Eres un modelo que extrae metadata académica.",
+          },
           { role: "user", content: prompt },
         ],
         max_tokens: 500,
@@ -2292,7 +2733,7 @@ export class MetadataExtractorService {
 
       if (response.choices[0].message?.content) {
         const responseContent = response.choices[0].message.content.trim();
-        const jsonResponse = responseContent.replace(/json|/g, '').trim();
+        const jsonResponse = responseContent.replace(/json|/g, "").trim();
 
         try {
           const parsedMetadata = JSON.parse(jsonResponse);
@@ -2311,6 +2752,7 @@ export class MetadataExtractorService {
 }
 
 
+
 // Backend/src/modules/tt/infrastructure/index.ts
 import multer from "multer";
 import { MongoTTRepository } from "./repositories/MongoTTRepository";
@@ -2323,8 +2765,11 @@ import { SemanticSearchUseCase } from "../application/useCases/SemanticSearchUse
 import { TTController } from "./controllers/TTController";
 import { GoogleCloudStorageService } from "./services/GoogleCloudStorageService";
 import { EmbeddingService } from "./services/EmbeddingService";
-import {ExtractMetadataUseCase } from "../application/useCases/ExtractMetadataUseCase"
+import { ExtractMetadataUseCase } from "../application/useCases/ExtractMetadataUseCase";
 import { MetadataExtractorService } from "./services/MetadataExtractorService";
+import { ApproveTTUseCase } from "../application/useCases/ApproveTTUseCase";
+import { RejectTTUseCase } from "../application/useCases/RejectTTUseCase";
+import { GetMultipleTTsUseCase } from "../application/useCases/GetMultipleTTsUseCase";
 // import { DeepPartial } from '../../../shared/types/DeepPartial';
 
 // 1. Instancia del repositorio (Mongo)
@@ -2337,13 +2782,18 @@ const listTTUseCase = new ListTTUseCase(ttRepository);
 const getTTByIdUseCase = new GetTTByIdUseCase(ttRepository);
 const updateTTUseCase = new UpdateTTUseCase(ttRepository, embeddingService);
 const deleteTTUseCase = new DeleteTTUseCase(ttRepository);
+const approveTTUseCase = new ApproveTTUseCase(ttRepository);
+const rejectTTUseCase = new RejectTTUseCase(ttRepository);
+const getMultipleTTsUseCase = new GetMultipleTTsUseCase(ttRepository);
 
 const semanticSearchUseCase = new SemanticSearchUseCase(
   ttRepository,
   embeddingService
 );
-const metadataExtractorService = new MetadataExtractorService()
-const extractMetadataUseCase= new ExtractMetadataUseCase(metadataExtractorService)
+const metadataExtractorService = new MetadataExtractorService();
+const extractMetadataUseCase = new ExtractMetadataUseCase(
+  metadataExtractorService
+);
 // 3. Instancia del servicio de GCS
 const googleCloudService = new GoogleCloudStorageService();
 
@@ -2354,6 +2804,9 @@ const controller = new TTController(
   getTTByIdUseCase,
   updateTTUseCase,
   deleteTTUseCase,
+  approveTTUseCase,
+  rejectTTUseCase,
+  getMultipleTTsUseCase,
   googleCloudService,
   semanticSearchUseCase,
   extractMetadataUseCase
@@ -2372,7 +2825,10 @@ export const ttController = {
   deleteTT: controller.deleteTT,
   downloadTT: controller.downloadTT,
   searchSemanticTT: controller.searchSemanticTT,
-  extractMetadata:controller.extractMetadata
+  extractMetadata: controller.extractMetadata,
+  approveTT: controller.approveTT,
+  rejectTT: controller.rejectTT,
+  getMultipleTTs: controller.getMultipleTTs,
 };
 
 
