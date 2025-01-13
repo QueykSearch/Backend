@@ -29,7 +29,11 @@ const TTSchema = new Schema({
   documentoUrl: { type: String, required: false },
   filename: { type: String, required: false },
   fechaPublicacion: { type: Date, default: Date.now },
-  plot_embedding: { type: [Number], default: [] }, // <-- Almacena array de floats
+  plot_embedding: { type: [Number], default: [] },
+
+  // Nuevo: campos para creador y status
+  createdBy: { type: String, required: false },
+  status: { type: String, default: "pendiente" },
 });
 
 export interface TTDocument extends TTEntity, Document {
@@ -57,6 +61,7 @@ export class MongoTTRepository implements TTRepositoryPort {
     grado?: string;
     palabrasClave?: string[];
     anoPublicacion?: number;
+    createdBy?: string;
     limit?: number;
     page?: number;
   }): Promise<{
@@ -72,6 +77,7 @@ export class MongoTTRepository implements TTRepositoryPort {
       grado,
       palabrasClave,
       anoPublicacion,
+      createdBy,
       limit = 10,
       page = 1,
     } = filters;
@@ -91,6 +97,10 @@ export class MongoTTRepository implements TTRepositoryPort {
       const startDate = new Date(`${anoPublicacion}-01-01`);
       const endDate = new Date(`${anoPublicacion}-12-31`);
       query.fechaPublicacion = { $gte: startDate, $lte: endDate };
+    }
+
+    if (createdBy) {
+      query.createdBy = createdBy;
     }
 
     const skip = (page - 1) * limit;

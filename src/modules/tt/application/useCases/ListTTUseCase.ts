@@ -19,6 +19,7 @@ export class ListTTUseCase {
     grado?: string;
     palabrasClave?: string[];
     anoPublicacion?: number;
+    createdBy?: string; // <--
     limit?: number;
     page?: number;
   }): Promise<{
@@ -27,6 +28,6 @@ export class ListTTUseCase {
     limit: number;
     data: TTEntity[];
   }> {
-    return await this.ttRepository.listTT(filters);
+    return this.ttRepository.listTT(filters);
   }
 }

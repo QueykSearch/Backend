@@ -11,6 +11,8 @@ import { DeepPartial } from "../../../../shared/types/DeepPartial";
 import { TTEntity } from "../../domain/entities/TTEntity";
 import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearchUseCase";
 import { ExtractMetadataUseCase } from "../../application/useCases/ExtractMetadataUseCase";
+import { ApproveTTUseCase } from "../../application/useCases/ApproveTTUseCase";
+import { RejectTTUseCase } from "../../application/useCases/RejectTTUseCase";
 
 /**
  * Controlador para manejar peticiones HTTP relacionadas con TT.
@@ -22,6 +24,8 @@ export class TTController {
     private readonly getTTByIdUseCase: GetTTByIdUseCase,
     private readonly updateTTUseCase: UpdateTTUseCase,
     private readonly deleteTTUseCase: DeleteTTUseCase,
+    private readonly approveTTUseCase: ApproveTTUseCase,
+    private readonly rejectTTUseCase: RejectTTUseCase,
     private readonly googleCloudService: GoogleCloudStorageService,
     private readonly semanticSearchUseCase: SemanticSearchUseCase,
     private readonly extractMetadataUseCase: ExtractMetadataUseCase
@@ -111,6 +115,9 @@ export class TTController {
         documentoUrl: fileUrl || "", // Guardamos la URL
         filename: file ? file.originalname : "",
         fechaPublicacion: new Date(),
+
+        createdBy: body.createdBy, // <-- Recibido del frontend
+        status: body.status || "pendiente",
       });
 
       // Enviar la respuesta sin retornar
@@ -144,6 +151,9 @@ export class TTController {
           : undefined,
         limit: req.query.limit ? Number(req.query.limit) : 10,
         page: req.query.page ? Number(req.query.page) : 1,
+
+        // nuevo:
+        createdBy: (req.query.createdBy as string) || undefined,
       };
 
       const result = await this.listTTUseCase.execute(filters);
@@ -152,7 +162,7 @@ export class TTController {
         message: "Lista de TTs obtenida con éxito",
         data: result,
       });
-    } catch (error: any) {
+    } catch (error) {
       next(error);
     }
   };
@@ -278,24 +288,77 @@ export class TTController {
       next(error);
     }
   };
-  public extractMetadata=async(
-    req:Request,
-    res:Response,
-    next:NextFunction
-  ):Promise<void>=>{
+  public extractMetadata = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
-      const file = req.file
-      if(!file){
-        res.status(400).json({message:"Falta el pdf en el req"});
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ message: "Falta el pdf en el req" });
         return;
       }
-      const metadata = await this.extractMetadataUseCase.execute(file.buffer) 
+      const metadata = await this.extractMetadataUseCase.execute(file.buffer);
       res.json({
-        message:"Metadata Extraida Correctamente",
-        data:metadata
-      })
+        message: "Metadata Extraida Correctamente",
+        data: metadata,
+      });
     } catch (error) {
-      next(error)
+      next(error);
     }
-  }
+  };
+
+  /**
+   * Maneja la aprobación de un TT.
+   */
+  public approveTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      if (!ttId) {
+        res.status(400).json({ message: "Falta el TT ID" });
+        return;
+      }
+      const updated = await this.approveTTUseCase.execute(ttId);
+      if (!updated) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+      res.status(200).json({
+        message: "TT aprobado con éxito",
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public rejectTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      if (!ttId) {
+        res.status(400).json({ message: "Falta el TT ID" });
+        return;
+      }
+      const updated = await this.rejectTTUseCase.execute(ttId);
+      if (!updated) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+      res.status(200).json({
+        message: "TT rechazado con éxito",
+        data: updated,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

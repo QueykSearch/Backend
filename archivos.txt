@@ -1,0 +1,2379 @@
+// Backend/src/shared/types/DeepPartial.ts
+/**
+ * Tipo que permite hacer partial (opcional) de manera recursiva.
+ */
+export type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends Array<infer U>
+    ? Array<DeepPartial<U>>
+    : T[P] extends object
+    ? DeepPartial<T[P]>
+    : T[P];
+};
+
+
+
+// Backend/src/shared/db/SupabaseClient.ts
+import {createClient} from '@supabase/supabase-js';
+import * as process from 'process';
+
+const {SUPABASE_URL, SUPABASE_ANON_KEY} = process.env;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Faltan variables de entorno para Supabase');
+}
+
+export const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+
+
+// Backend/src/shared/db/MongoClient.ts
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+/**
+ * Conexión global a Mongo usando Mongoose.
+ */
+
+let isConnected = false;
+
+export async function connectMongo(): Promise<void> {
+  if (isConnected) return;
+
+  const mongoUri =
+    process.env.MONGO_URL || "mongodb://localhost:27017/QueykSearch";
+  try {
+    await mongoose.connect(mongoUri);
+    isConnected = true;
+    console.log("Conexión exitosa a MongoDB en ", mongoUri);
+  } catch (error) {
+    console.error("Error al conectar a MongoDB:", error);
+    throw error;
+  }
+}
+
+
+
+// Backend/src/middlewares/auth.ts
+// import jwt from "express-jwt";
+// import jwksRsa from "jwks-rsa";
+// import { Request, Response, NextFunction } from "express";
+
+// /**
+//  * Middleware para verificar el JWT emitido por Auth0.
+//  */
+// export const checkJwt = jwt({
+//   secret: jwksRsa.expressJwtSecret({
+//     cache: true,
+//     rateLimit: true,
+//     jwksRequestsPerMinute: 5,
+//     jwksUri: `https://<your-auth0-domain>/.well-known/jwks.json`, // Reemplaza con tu dominio de Auth0
+//   }),
+//   audience: "<YOUR_API_IDENTIFIER>", // Reemplaza con tu identificador de API en Auth0
+//   issuer: `https://<your-auth0-domain>/`, // Reemplaza con tu dominio de Auth0
+//   algorithms: ["RS256"],
+// });
+
+// /**
+//  * Middleware para verificar los roles del usuario.
+//  * @param requiredRoles - Rol o roles requeridos para acceder a la ruta
+//  */
+// export const checkRoles = (requiredRoles: string | string[]) => {
+//   return (req: Request, res: Response, next: NextFunction) => {
+//     const user = req.user as any;
+//     if (!user || !user.roles) {
+//       return res.status(403).json({ message: "Forbidden" });
+//     }
+
+//     const roles: string[] = user.roles;
+
+//     if (typeof requiredRoles === "string") {
+//       if (!roles.includes(requiredRoles)) {
+//         return res.status(403).json({ message: "Forbidden" });
+//       }
+//     } else {
+//       const hasRole = requiredRoles.some((role) => roles.includes(role));
+//       if (!hasRole) {
+//         return res.status(403).json({ message: "Forbidden" });
+//       }
+//     }
+
+//     next();
+//   };
+// };
+
+
+
+// Backend/src/index.ts
+import { startServer } from "./app/server";
+
+/**
+ * Punto de entrada principal de la aplicación.
+ * Llama a la función que inicia el servidor.
+ */
+
+startServer();
+
+
+
+// Backend/src/app/server.ts
+// src/app/server.ts
+
+import express, { Application, Request, Response, NextFunction } from "express";
+import dotenv from "dotenv";
+import { router } from "./routes";
+import { connectMongo } from "../shared/db/MongoClient";
+import cors from "cors"; // Importar cors
+
+// Cargar variables de entorno
+dotenv.config();
+
+export async function startServer() {
+  try {
+    // Conectar a Mongo antes de levantar el servidor
+    await connectMongo();
+
+    // Inicializar la aplicación Express
+    const app: Application = express();
+
+    // Configurar CORS
+    app.use(cors()); // Usar CORS con configuración por defecto
+
+    // Middlewares para parseo de JSON y URL-encoded
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: false }));
+
+    // Registrar rutas
+    app.use("/api/v1", router);
+
+    // Middleware de depuración para rutas no encontradas
+    app.use((req: Request, res: Response) => {
+      console.log(`Ruta no encontrada: ${req.method} ${req.url}`);
+      res.status(404).send(`Cannot ${req.method} ${req.url}`);
+    });
+
+    // Iniciar el servidor
+    const PORT = process.env.PORT || 4000;
+    app.listen(PORT, () => {
+      console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    });
+
+    // Listar rutas registradas
+    listRoutes(app);
+  } catch (error) {
+    console.error("Error al iniciar el servidor:", error);
+    process.exit(1);
+  }
+}
+
+function listRoutes(app: Application) {
+  console.log("Listado de rutas registradas:");
+  app._router.stack.forEach(function (middleware: any) {
+    if (middleware.route) {
+      // rutas registradas
+      console.log(
+        `${middleware.route.stack[0].method.toUpperCase()} ${
+          middleware.route.path
+        }`
+      );
+    } else if (middleware.name === "router") {
+      // rutas anidadas
+      middleware.handle.stack.forEach(function (handler: any) {
+        const route = handler.route;
+        if (route) {
+          console.log(
+            `${handler.route.stack[0].method.toUpperCase()} ${route.path}`
+          );
+        }
+      });
+    }
+  });
+}
+
+// // Configurar CORS con opciones personalizadas
+// const corsOptions = {
+//   origin: "http://localhost:3000", // Origen permitido
+//   methods: ["GET", "POST", "PUT", "DELETE"], // Métodos HTTP permitidos
+//   credentials: true, // Permitir el envío de cookies si es necesario
+// };
+
+// app.use(cors(corsOptions));
+
+// const allowedOrigins = ["http://localhost:3000", "http://example.com"];
+
+// const corsOptions = {
+//   origin: function (origin: any, callback: any) {
+//     // Permitir solicitudes sin origen (por ejemplo, mobile apps, curl, etc.)
+//     if (!origin) return callback(null, true);
+//     if (allowedOrigins.indexOf(origin) === -1) {
+//       const msg = "El origen CORS no está permitido por la política de este servidor.";
+//       return callback(new Error(msg), false);
+//     }
+//     return callback(null, true);
+//   },
+//   methods: ["GET", "POST", "PUT", "DELETE"],
+//   credentials: true,
+// };
+
+// app.use(cors(corsOptions));
+
+
+
+// Backend/src/app/routes.ts
+import { Router } from "express";
+import { ttController } from "../modules/tt/infrastructure/index";
+import { userController } from "../modules/user/infrastructure/index";
+// import { checkJwt, checkRoles } from '../middlewares/auth'; // Middlewares para Auth0
+
+/**
+ * Creamos un Router principal
+ */
+export const router = Router();
+
+// // Rutas específicas para el módulo TT
+// router.post("/tts", checkJwt, checkRoles('academico'), ttController.createTT, ttController.createTTHandler);
+// router.get("/tts", checkJwt, checkRoles(['academico', 'gestor']), ttController.listTT);
+// router.get("/tts/:ttId", checkJwt, checkRoles(['academico', 'gestor']), ttController.getTTById);
+// router.put("/tts/:ttId", checkJwt, checkRoles('gestor'), ttController.updateTT);
+// router.delete("/tts/:ttId", checkJwt, checkRoles('gestor'), ttController.deleteTT);
+
+// // Rutas específicas para el módulo Usuario
+// router.post("/users", userController.createUser); // Registro de usuarios, podría estar protegido si solo admins pueden crear usuarios
+// router.get("/users", checkJwt, checkRoles(['admin']), userController.listUsers);
+// router.get("/users/:userId", checkJwt, checkRoles(['admin', 'self']), userController.getUserById);
+// router.put("/users/:userId", checkJwt, checkRoles(['admin', 'self']), userController.updateUser);
+// router.delete("/users/:userId", checkJwt, checkRoles('admin'), userController.deleteUser);
+// router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
+
+router.get("/tts/semantic", ttController.searchSemanticTT);
+router.post("/tts/metadata",ttController.createTT,ttController.extractMetadata);
+router.post("/tts", ttController.createTT, ttController.createTTHandler);
+router.get("/tts", ttController.listTT);
+router.get("/tts/:ttId", ttController.getTTById);
+router.put("/tts/:ttId", ttController.updateTT);
+router.delete("/tts/:ttId", ttController.deleteTT);
+router.get("/tts/:ttId/download", ttController.downloadTT);
+
+// Rutas específicas para el módulo Usuario
+router.post("/users", userController.createUser); // Registro de usuarios, podría estar protegido si solo admins pueden crear usuarios
+router.get("/users", userController.listUsers);
+router.get("/users/:userId", userController.getUserById);
+router.put("/users/:userId", userController.updateUser);
+router.delete("/users/:userId", userController.deleteUser);
+router.post("/refresh-token", userController.refreshToken); // Opcional: Ruta de refresco de token
+router.post("/login", userController.loginUser); // Opcional: Ruta de login si es necesario
+router.post("/login-with-token", userController.loginUserWithToken); // Opcional: Ruta de login con token
+
+// Ruta de prueba para verificar que las rutas están funcionando
+router.get("/test", (req, res) => {
+  res.send("Ruta de test funcionando correctamente");
+});
+
+
+
+// Backend/src/modules/user/application/useCases/UpdateUserUseCase.ts
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+import { UserEntity } from "../../domain/entities/UserEntity";
+import { DeepPartial } from "../../../../shared/types/DeepPartial";
+
+/**
+ * Caso de uso para actualizar un Usuario existente.
+ */
+export class UpdateUserUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para actualizar un Usuario.
+   * @param id - ID del Usuario a actualizar
+   * @param updateData - Datos a actualizar
+   * @returns UsuarioEntity actualizada o null si no se encuentra
+   */
+  public async execute(
+    id: string,
+    updateData: DeepPartial<UserEntity>
+  ): Promise<UserEntity | null> {
+    // Si se actualiza el email, verificar si ya existe en Auth0
+    if (updateData.email) {
+      const existingUser = await this.userRepository.findUserByEmail(
+        updateData.email
+      );
+      if (existingUser && existingUser._id !== id) {
+        throw new Error("El email ya está en uso");
+      }
+      // Actualizar el email en Auth0 también si es necesario
+      // await this.auth0Service.updateUserEmail(id, updateData.email);
+    }
+
+    // Actualizar el Usuario en la base de datos (solo datos adicionales si es necesario)
+    return await this.userRepository.updateUserById(id, updateData);
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/GetUserByIdUseCase.ts
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+import { UserEntity } from "../../domain/entities/UserEntity";
+
+/**
+ * Caso de uso para obtener un Usuario por su ID.
+ */
+export class GetUserByIdUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para obtener un Usuario por ID.
+   * @param id - ID del Usuario
+   * @returns UsuarioEntity o null si no se encuentra
+   */
+  public async execute(id: string): Promise<UserEntity | null> {
+    return await this.userRepository.findUserById(id);
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/DeleteUserUseCase.ts
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+
+/**
+ * Caso de uso para eliminar un Usuario.
+ */
+export class DeleteUserUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para eliminar un Usuario.
+   * @param id - ID del Usuario a eliminar
+   * @returns true si se eliminó, false si no se encontró
+   */
+  public async execute(id: string): Promise<boolean> {
+    // Eliminar el Usuario en Auth0 también si es necesario
+    // await this.auth0Service.deleteUser(id);
+
+    const result = await this.userRepository.deleteUserById(id);
+    return result.deletedCount > 0;
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/CreateUserUseCase.ts
+import {UserRepositoryPort} from "../../domain/UserRepositoryPort";
+import {UserEntity} from "../../domain/entities/UserEntity";
+import {AuthResponse} from "@supabase/supabase-js";
+import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+import {CreateUserDTO} from "../../infrastructure/dtos/CreateUserDTO";
+
+/**
+ * Caso de uso para crear un nuevo Usuario.
+ */
+export class CreateUserUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para crear un Usuario.
+   * @param createUserDTO - Datos del Usuario a crear
+   * @returns Usuario creado
+   */
+  public async execute(createUserDTO: CreateUserDTO): Promise<UserEntity> {
+    if (await this.userRepository.findUserByEmail(createUserDTO.email)) {
+      throw new Error("El email ya está en uso");
+    }
+
+    const signUpResponse: AuthResponse = await supabaseClient.auth.signUp({
+      email: createUserDTO.email,
+      password: createUserDTO.password,
+    });
+
+    if (signUpResponse.error) {
+      throw new Error(signUpResponse.error.message);
+    }
+
+    // Aquí, en lugar de crear el usuario en la base de datos, deberíamos crear el usuario en Auth0.
+    // Luego, almacenar cualquier información adicional en nuestra base de datos si es necesario.
+
+    // Por simplicidad, asumiremos que Auth0 maneja la creación y solo almacenaremos datos adicionales.
+    // Puedes integrar con Auth0 usando su SDK o API.
+
+    // Ejemplo de integración con Auth0:
+    // const auth0User = await this.auth0Service.createUser(userData);
+    // userData._id = auth0User.id;
+
+    // Crear el Usuario en la base de datos (solo datos adicionales si es necesario)
+    return await this.userRepository.createUser({
+      nombreCompleto: createUserDTO.nombreCompleto,
+      email: createUserDTO.email,
+      roles: createUserDTO.roles || ["user"],
+    });
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/ListUsersUseCase.ts
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+import { UserEntity } from "../../domain/entities/UserEntity";
+
+/**
+ * Caso de uso para listar Usuarios con filtros y paginación.
+ */
+export class ListUsersUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para listar Usuarios.
+   * @param filters - Filtros de búsqueda y paginación
+   * @returns Lista de Usuarios con total, página, límite y datos
+   */
+  public async execute(filters: {
+    nombreCompleto?: string;
+    email?: string;
+    role?: string;
+    limit?: number;
+    page?: number;
+  }): Promise<{
+    total: number;
+    page: number;
+    limit: number;
+    data: UserEntity[];
+  }> {
+    return await this.userRepository.listUsers(filters);
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/LoginUserWithTokenUseCase.ts
+import {UserRepositoryPort} from "../../domain/UserRepositoryPort";
+import {UserEntity} from "../../domain/entities/UserEntity";
+import {UserResponse} from "@supabase/supabase-js";
+import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+import {RefreshUserTokenUseCase} from "./RefreshUserTokenUseCase";
+
+export class LoginUserWithTokenUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort, private readonly refreshUserTokenUseCase: RefreshUserTokenUseCase) {
+  }
+
+  public async execute(params: {
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number,
+  }): Promise<{
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number,
+    user: UserEntity
+  }> {
+    const now = new Date().getTime();
+
+    if (params.expiresAt < now) {
+      return await this.refreshUserTokenUseCase.execute({refresh_token: params.refreshToken});
+    }
+
+    const response: UserResponse = await supabaseClient.auth.getUser(params.accessToken);
+
+    if (response.error) {
+      switch (response.error.code) {
+        case 'session_expired': {
+          return await this.refreshUserTokenUseCase.execute({refresh_token: params.refreshToken});
+        }
+        case 'user_not_found':
+          throw new Error("Usuario no encontrado");
+        case 'email_not_confirmed':
+          throw new Error("Email no confirmado");
+        case 'invalid_credentials':
+          throw new Error("Credenciales inválidas");
+        default:
+          throw new Error("Error al iniciar sesión");
+      }
+    }
+
+    if (!response.data.user) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    const {user} = response.data;
+
+    if (!user.email) {
+      throw new Error("Email del usuario no encontrado");
+    }
+
+    const userEntity: UserEntity | null = await this.userRepository.findUserByEmail(user.email);
+
+    if (!userEntity) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    return {
+      accessToken: params.accessToken,
+      refreshToken: params.refreshToken,
+      expiresAt: params.expiresAt,
+      user: userEntity
+    }
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/LoginUserUseCase.ts
+import {UserRepositoryPort} from "../../domain/UserRepositoryPort";
+import {UserEntity} from "../../domain/entities/UserEntity";
+import {AuthTokenResponsePassword} from "@supabase/supabase-js";
+import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+
+export class LoginUserUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {
+  }
+
+  public async execute(params: {
+    email: string,
+    password: string,
+  }): Promise<{
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number,
+    user: UserEntity
+  }> {
+    const response: AuthTokenResponsePassword = await supabaseClient.auth.signInWithPassword(params);
+
+    if (response.error) {
+      switch (response.error.code) {
+        case 'invalid_credentials':
+          throw new Error("Credenciales inválidas");
+        case 'user_not_found':
+          throw new Error("Usuario no encontrado");
+        case 'email_not_confirmed':
+          throw new Error("Email no confirmado");
+        default:
+          throw new Error("Error al iniciar sesión");
+      }
+    }
+
+    if (!response.data.user) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    const {session} = response.data;
+    const {access_token, refresh_token, expires_at} = session;
+
+    const userEntity: UserEntity | null = await this.userRepository.findUserByEmail(params.email);
+
+    if (!userEntity) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    return {
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresAt: expires_at || 0,
+      user: userEntity
+    }
+  }
+}
+
+
+
+// Backend/src/modules/user/application/useCases/RefreshUserTokenUseCase.ts
+import {UserRepositoryPort} from "../../domain/UserRepositoryPort";
+import {UserEntity} from "../../domain/entities/UserEntity";
+import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+import {AuthResponse} from "@supabase/supabase-js";
+
+export class RefreshUserTokenUseCase {
+  constructor(private readonly userRepository: UserRepositoryPort) {
+  }
+
+  public async execute(params: {
+    refresh_token: string,
+  }): Promise<{
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number,
+    user: UserEntity
+  }> {
+    const response: AuthResponse = await supabaseClient.auth.refreshSession(params);
+    if (response.error) {
+      switch (response.error.code) {
+        case 'refresh_token_not_found':
+          throw new Error("Token de refresco no encontrado");
+        case 'refresh_token_already_used':
+          throw new Error("Token de refresco ya utilizado");
+        default:
+          throw new Error("Error al refrescar sesión");
+      }
+    }
+
+    const {session} = response.data;
+
+    if (!session) {
+      throw new Error("Sesión no encontrada");
+    }
+
+    if (!session.user.email) {
+      throw new Error("Email del usuario no encontrado");
+    }
+
+    const {access_token, refresh_token, expires_at} = session;
+
+    const userEntity: UserEntity | null = await this.userRepository.findUserByEmail(session.user.email);
+
+    if (!userEntity) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    return {
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresAt: expires_at || 0,
+      user: userEntity
+    }
+  }
+}
+
+
+
+// Backend/src/modules/user/domain/entities/UserEntity.ts
+/**
+ * Entidad que representa un Usuario.
+ */
+export interface UserEntity {
+  _id?: string;
+  nombreCompleto: string;
+  email: string;
+  roles: string[]; // Ejemplo: ['admin', 'user']
+  fechaRegistro?: Date;
+  ultimoLogin?: Date;
+  // Otras propiedades que consideres necesarias
+}
+
+
+
+// Backend/src/modules/user/domain/UserRepositoryPort.ts
+import { UserEntity } from './entities/UserEntity';
+import { DeepPartial } from '../../../shared/types/DeepPartial';
+
+/**
+ * Puerto (interfaz) que define las operaciones del repositorio de Usuarios.
+ */
+export interface UserRepositoryPort {
+  createUser(user: UserEntity): Promise<UserEntity>;
+  
+  listUsers(filters: {
+    nombreCompleto?: string;
+    email?: string;
+    role?: string;
+    limit?: number;
+    page?: number;
+  }): Promise<{ total: number; page: number; limit: number; data: UserEntity[] }>;
+  
+  findUserById(id: string): Promise<UserEntity | null>;
+  
+  findUserByEmail(email: string): Promise<UserEntity | null>;
+  
+  updateUserById(id: string, updateData: DeepPartial<UserEntity>): Promise<UserEntity | null>;
+  
+  deleteUserById(id: string): Promise<{ deletedCount: number }>;
+}
+
+
+
+// Backend/src/modules/user/infrastructure/controllers/UserController.ts
+// src/modules/user/infrastructure/controllers/UserController.ts
+
+import {Request, Response, NextFunction} from "express";
+import {CreateUserUseCase} from "../../application/useCases/CreateUserUseCase";
+import {ListUsersUseCase} from "../../application/useCases/ListUsersUseCase";
+import {GetUserByIdUseCase} from "../../application/useCases/GetUserByIdUseCase";
+import {UpdateUserUseCase} from "../../application/useCases/UpdateUserUseCase";
+import {DeleteUserUseCase} from "../../application/useCases/DeleteUserUseCase";
+// import { AuthService } from '../services/AuthService';
+import {CreateUserDTO} from "../dtos/CreateUserDTO";
+import {UpdateUserDTO} from "../dtos/UpdateUserDTO";
+import {DeepPartial} from "../../../../shared/types/DeepPartial";
+import {UserEntity} from "../../domain/entities/UserEntity";
+import {createUserSchema} from "../validators/CreateUserValidator";
+import {updateUserSchema} from "../validators/UpdateUserValidator";
+import {supabaseClient} from "../../../../shared/db/SupabaseClient";
+import {AuthResponse, AuthTokenResponsePassword} from "@supabase/supabase-js";
+import {LoginUserUseCase} from "../../application/useCases/LoginUserUseCase";
+import {RefreshUserTokenUseCase} from "../../application/useCases/RefreshUserTokenUseCase";
+import {LoginUserWithTokenUseCase} from "../../application/useCases/LoginUserWithTokenUseCase";
+
+/**
+ * Controlador para manejar peticiones HTTP relacionadas con Usuarios.
+ */
+export class UserController {
+  constructor(
+    private readonly createUserUseCase: CreateUserUseCase,
+    private readonly listUsersUseCase: ListUsersUseCase,
+    private readonly getUserByIdUseCase: GetUserByIdUseCase,
+    private readonly updateUserUseCase: UpdateUserUseCase,
+    private readonly deleteUserUseCase: DeleteUserUseCase,
+    private readonly loginUserUseCase: LoginUserUseCase,
+    private readonly refreshUserTokenUseCase: RefreshUserTokenUseCase,
+    private readonly loginUserWithTokenUseCase: LoginUserWithTokenUseCase
+  ) // private readonly authService: AuthService
+  {
+  }
+
+  /**
+   * Maneja la creación de un nuevo Usuario.
+   */
+  public createUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      // Validar los datos del body
+      const {error, value} = createUserSchema.validate(req.body);
+      if (error) {
+        res
+          .status(400)
+          .json({message: "Datos inválidos", details: error.details});
+        return;
+      }
+
+      const body: CreateUserDTO = value;
+
+      // Ejemplo simplificado:
+      const newUser = await this.createUserUseCase.execute(body);
+
+      res.status(201).json({
+        message: "Usuario creado con éxito",
+        data: newUser,
+      });
+    } catch (error: any) {
+      // Manejo de errores específicos
+      if (error.message === "El email ya está en uso") {
+        res.status(409).json({message: error.message});
+        return;
+      }
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja la lista de Usuarios con filtros y paginación.
+   */
+  public listUsers = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const filters = {
+        nombreCompleto: req.query.nombreCompleto as string,
+        email: req.query.email as string,
+        role: req.query.role as string,
+        limit: req.query.limit ? Number(req.query.limit) : 10,
+        page: req.query.page ? Number(req.query.page) : 1,
+      };
+
+      const result = await this.listUsersUseCase.execute(filters);
+
+      res.status(200).json({
+        message: "Lista de Usuarios obtenida con éxito",
+        data: result,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja obtener un Usuario por su ID.
+   */
+  public getUserById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {userId} = req.params;
+
+      if (!userId) {
+        res.status(400).json({message: "userId es requerido"});
+        return;
+      }
+
+      const user = await this.getUserByIdUseCase.execute(userId);
+
+      if (!user) {
+        res.status(404).json({message: "Usuario no encontrado"});
+        return;
+      }
+
+      res.status(200).json({
+        message: "Usuario obtenido con éxito",
+        data: user,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja actualizar un Usuario existente.
+   */
+  public updateUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {userId} = req.params;
+      const updateData: UpdateUserDTO = req.body;
+
+      if (!userId) {
+        res.status(400).json({message: "userId es requerido"});
+        return;
+      }
+
+      // Validar los datos de actualización
+      const {error, value} = updateUserSchema.validate(updateData);
+      if (error) {
+        res
+          .status(400)
+          .json({message: "Datos inválidos", details: error.details});
+        return;
+      }
+
+      const updatedUser = await this.updateUserUseCase.execute(
+        userId,
+        value as DeepPartial<UserEntity>
+      );
+
+      if (!updatedUser) {
+        res.status(404).json({message: "Usuario no encontrado"});
+        return;
+      }
+
+      res.status(200).json({
+        message: "Usuario actualizado con éxito",
+        data: updatedUser,
+      });
+    } catch (error: any) {
+      if (error.message === "El email ya está en uso") {
+        res.status(409).json({message: error.message});
+        return;
+      }
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja eliminar un Usuario.
+   */
+  public deleteUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {userId} = req.params;
+
+      if (!userId) {
+        res.status(400).json({message: "userId es requerido"});
+        return;
+      }
+
+      const deleted = await this.deleteUserUseCase.execute(userId);
+
+      if (!deleted) {
+        res.status(404).json({message: "Usuario no encontrado"});
+        return;
+      }
+
+      res.status(200).json({
+        message: "Usuario eliminado con éxito",
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  public refreshToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {refreshToken} = req.body;
+
+      if (!refreshToken) {
+        res.status(400).json({message: "refreshToken es requerido"});
+        return;
+      }
+
+      res.status(200).json(await this.refreshUserTokenUseCase.execute(req.body));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public loginUserWithToken = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {accessToken, refreshToken, expiresAt} = req.body;
+
+      if (!accessToken || !refreshToken || !expiresAt) {
+        res.status(400).json({message: "accessToken, refreshToken y expiresAt son requeridos"});
+        return;
+      }
+
+      res.status(200).json({
+        message: "Inicio de sesión exitoso",
+        data: await this.loginUserWithTokenUseCase.execute(req.body),
+      });
+    } catch (error: any) {
+      if (error.message === "Credenciales inválidas") {
+        res.status(401).json({message: error.message});
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * (Opcional) Maneja el inicio de sesión de un Usuario.
+   * Si Auth0 maneja el inicio de sesión desde el frontend, este método podría no ser necesario.
+   */
+  public loginUser = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const {email, password} = req.body;
+
+      if (!email || !password) {
+        res.status(400).json({message: "Email y contraseña son requeridos"});
+        return;
+      }
+
+      res.status(200).json({
+        message: "Inicio de sesión exitoso",
+        data: await this.loginUserUseCase.execute(req.body),
+      });
+    } catch (error: any) {
+      if (error.message === "Credenciales inválidas") {
+        res.status(401).json({message: error.message});
+        return;
+      }
+      next(error);
+    }
+  };
+}
+
+
+
+// Backend/src/modules/user/infrastructure/dtos/UpdateUserDTO.ts
+export interface UpdateUserDTO {
+  nombreCompleto?: string;
+  email?: string;
+  // password?: string; // Removido si Auth0 maneja la contraseña
+  roles?: string[];
+  // Otros campos opcionales según necesidad
+}
+
+
+
+// Backend/src/modules/user/infrastructure/dtos/DeleteUserDTO.ts
+export interface DeleteUserDTO {
+  userId: string;
+}
+
+
+
+// Backend/src/modules/user/infrastructure/dtos/GetUserByIdDTO.ts
+export interface GetUserByIdDTO {
+  userId: string;
+}
+
+
+
+// Backend/src/modules/user/infrastructure/dtos/ListUsersDTO.ts
+/**
+ * DTO para listar Usuarios.
+ */
+export interface ListUsersDTO {
+  nombreCompleto?: string;
+  email?: string;
+  role?: string;
+  limit?: number;
+  page?: number;
+}
+
+
+
+// Backend/src/modules/user/infrastructure/dtos/CreateUserDTO.ts
+export interface CreateUserDTO {
+  nombreCompleto: string;
+  email: string;
+  password: string;
+  roles?: string[]; // Opcional, se asignarán roles predeterminados si no se proporcionan
+}
+
+
+
+// Backend/src/modules/user/infrastructure/repositories/MongoUserRepository.ts
+// src/modules/user/infrastructure/repositories/MongoUserRepository.ts
+
+import { UserRepositoryPort } from "../../domain/UserRepositoryPort";
+import { UserEntity } from "../../domain/entities/UserEntity";
+import { model, Schema, Document } from "mongoose";
+import { DeepPartial } from "../../../../shared/types/DeepPartial";
+
+/**
+ * Definición del Schema de Mongoose para Usuario.
+ */
+const UserSchema = new Schema({
+  nombreCompleto: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  roles: { type: [String], default: ["user"] },
+  fechaRegistro: { type: Date, default: Date.now },
+  ultimoLogin: { type: Date },
+});
+
+export interface UserDocument extends UserEntity, Document {
+  _id: string;
+}
+
+/**
+ * Creación del modelo de Mongoose para Usuario.
+ */
+const UserModel = model<UserDocument>("User", UserSchema);
+
+/**
+ * Implementación de la interfaz UserRepositoryPort usando MongoDB (Mongoose).
+ */
+export class MongoUserRepository implements UserRepositoryPort {
+  public async createUser(user: UserEntity): Promise<UserEntity> {
+    const createdUser = await UserModel.create(user);
+    return createdUser.toObject();
+  }
+
+  public async listUsers(filters: {
+    nombreCompleto?: string;
+    email?: string;
+    role?: string;
+    limit?: number;
+    page?: number;
+  }): Promise<{
+    total: number;
+    page: number;
+    limit: number;
+    data: UserEntity[];
+  }> {
+    const { nombreCompleto, email, role, limit = 10, page = 1 } = filters;
+
+    const query: any = {};
+
+    if (nombreCompleto) {
+      query.nombreCompleto = { $regex: nombreCompleto, $options: "i" };
+    }
+
+    if (email) {
+      query.email = { $regex: email, $options: "i" };
+    }
+
+    if (role) {
+      query.roles = role;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      UserModel.countDocuments(query),
+      UserModel.find(query).skip(skip).limit(limit).exec(),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      data: data.map((user) => user.toObject()),
+    };
+  }
+
+  public async findUserById(id: string): Promise<UserEntity | null> {
+    try {
+      const user = await UserModel.findById(id).exec();
+      return user ? user.toObject() : null;
+    } catch (error) {
+      console.error("Error al encontrar Usuario por ID:", error);
+      throw error;
+    }
+  }
+
+  public async findUserByEmail(email: string): Promise<UserEntity | null> {
+    try {
+      const user = await UserModel.findOne({ email }).exec();
+      return user ? user.toObject() : null;
+    } catch (error) {
+      console.error("Error al encontrar Usuario por Email:", error);
+      throw error;
+    }
+  }
+
+  public async updateUserById(
+    id: string,
+    updateData: DeepPartial<UserEntity>
+  ): Promise<UserEntity | null> {
+    try {
+      const updatedUser = await UserModel.findByIdAndUpdate(id, updateData, {
+        new: true,
+      }).exec();
+      return updatedUser ? updatedUser.toObject() : null;
+    } catch (error) {
+      console.error("Error al actualizar Usuario por ID:", error);
+      throw error;
+    }
+  }
+
+  public async deleteUserById(id: string): Promise<{ deletedCount: number }> {
+    try {
+      const result = await UserModel.deleteOne({ _id: id }).exec();
+      return { deletedCount: result.deletedCount };
+    } catch (error) {
+      console.error("Error al eliminar Usuario por ID:", error);
+      throw error;
+    }
+  }
+}
+
+
+
+// Backend/src/modules/user/infrastructure/services/AuthService.ts
+
+
+
+// Backend/src/modules/user/infrastructure/validators/UpdateUserValidator.ts
+import Joi from "joi";
+import { UpdateUserDTO } from "../dtos/UpdateUserDTO";
+
+/**
+ * Esquema de validación para actualizar un Usuario.
+ */
+export const updateUserSchema = Joi.object<UpdateUserDTO>({
+  nombreCompleto: Joi.string().min(3).max(100).optional(),
+  email: Joi.string().email().optional(),
+  //   password: Joi.string().min(6).optional(),
+  roles: Joi.array().items(Joi.string()).optional(),
+});
+
+
+
+// Backend/src/modules/user/infrastructure/validators/CreateUserValidator.ts
+import Joi from "joi";
+import { CreateUserDTO } from "../dtos/CreateUserDTO";
+
+/**
+ * Esquema de validación para crear un Usuario.
+ */
+export const createUserSchema = Joi.object<CreateUserDTO>({
+  nombreCompleto: Joi.string().min(3).max(100).required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required()
+});
+
+
+
+// Backend/src/modules/user/infrastructure/index.ts
+// src/modules/user/infrastructure/index.ts
+
+import {MongoUserRepository} from "./repositories/MongoUserRepository";
+import {CreateUserUseCase} from "../application/useCases/CreateUserUseCase";
+import {ListUsersUseCase} from "../application/useCases/ListUsersUseCase";
+import {GetUserByIdUseCase} from "../application/useCases/GetUserByIdUseCase";
+import {UpdateUserUseCase} from "../application/useCases/UpdateUserUseCase";
+import {DeleteUserUseCase} from "../application/useCases/DeleteUserUseCase";
+import {UserController} from "./controllers/UserController";
+import {LoginUserUseCase} from "../application/useCases/LoginUserUseCase";
+import {LoginUserWithTokenUseCase} from "../application/useCases/LoginUserWithTokenUseCase";
+import {RefreshUserTokenUseCase} from "../application/useCases/RefreshUserTokenUseCase";
+// import { AuthService } from './services/AuthService'; // Opcional si Auth0 maneja todo
+
+// 1. Instancia del repositorio (Mongo)
+const userRepository = new MongoUserRepository();
+
+// 2. Instancia de los casos de uso
+const createUserUseCase = new CreateUserUseCase(userRepository);
+const listUsersUseCase = new ListUsersUseCase(userRepository);
+const getUserByIdUseCase = new GetUserByIdUseCase(userRepository);
+const updateUserUseCase = new UpdateUserUseCase(userRepository);
+const deleteUserUseCase = new DeleteUserUseCase(userRepository);
+const loginUserUseCase = new LoginUserUseCase(userRepository); // Opcional: Método de login
+const refreshUserTokenUseCase = new RefreshUserTokenUseCase(userRepository); // Opcional: Método de refresco de token
+const loginUserWithTokenUseCase = new LoginUserWithTokenUseCase(userRepository, refreshUserTokenUseCase); // Opcional: Método de login con token
+
+// 3. Instancia del servicio de autenticación
+// const authService = new AuthService(userRepository); // Opcional
+
+// 4. Instancia del controlador
+const controller = new UserController(
+  createUserUseCase,
+  listUsersUseCase,
+  getUserByIdUseCase,
+  updateUserUseCase,
+  deleteUserUseCase,
+  loginUserUseCase,
+  refreshUserTokenUseCase,
+  loginUserWithTokenUseCase
+);
+
+// 5. Exportar el controlador con los métodos
+export const userController = {
+  createUser: controller.createUser,
+  listUsers: controller.listUsers,
+  getUserById: controller.getUserById,
+  updateUser: controller.updateUser,
+  deleteUser: controller.deleteUser,
+  refreshToken: controller.refreshToken, // Opcional: Método de refresco de token
+  loginUserWithToken: controller.loginUserWithToken,
+  loginUser: controller.loginUser, // Opcional: Método de login
+};
+
+
+
+// Backend/src/modules/tt/application/useCases/CreateTTUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+import { EmbeddingService } from "../../../tt/infrastructure/services/EmbeddingService";
+
+export class CreateTTUseCase {
+  constructor(
+    private readonly ttRepository: TTRepositoryPort,
+    private readonly embeddingService: EmbeddingService
+  ) {}
+
+  public async execute(ttData: TTEntity): Promise<TTEntity> {
+    // Validaciones iniciales
+    if (!ttData.titulo) {
+      throw new Error("El título no puede estar vacío");
+    }
+
+    // 1. Generar embedding para "resumen"
+    let embedding: number[] | null = null;
+    if (ttData.resumen) {
+      embedding = await this.embeddingService.generateEmbedding(ttData.resumen);
+    }
+
+    // 2. Asignar el embedding en la entidad (ej: campo "plot_embedding")
+    //    pero ojo, tu TTEntity no lo tiene. Puedes ampliar TTEntity para un optional:
+    //    plot_embedding?: number[];
+    (ttData as any).plot_embedding = embedding || [];
+
+    // 3. Llamamos al repositorio para guardar
+    const newTT = await this.ttRepository.createTT(ttData);
+    return newTT;
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/DeleteTTUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+
+/**
+ * Caso de uso para eliminar un TT.
+ */
+export class DeleteTTUseCase {
+  constructor(private readonly ttRepository: TTRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para eliminar un TT.
+   * @param id - ID del TT a eliminar
+   * @returns true si se eliminó, false si no se encontró
+   */
+  public async execute(id: string): Promise<boolean> {
+    const result = await this.ttRepository.deleteTTById(id);
+    return result.deletedCount > 0;
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/GetTTByIdUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+
+/**
+ * Caso de uso para obtener un TT por su ID.
+ */
+export class GetTTByIdUseCase {
+  constructor(private readonly ttRepository: TTRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para obtener un TT por ID.
+   * @param id - ID del TT
+   * @returns TTEntity o null si no se encuentra
+   */
+  public async execute(id: string): Promise<TTEntity | null> {
+    return await this.ttRepository.findTTById(id);
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/SemanticSearchUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { EmbeddingService } from "../../../tt/infrastructure/services/EmbeddingService";
+import { TTEntity } from "../../domain/entities/TTEntity";
+
+export class SemanticSearchUseCase {
+  constructor(
+    private readonly ttRepository: TTRepositoryPort,
+    private readonly embeddingService: EmbeddingService
+  ) {}
+
+  public async execute(query: string): Promise<TTEntity[]> {
+    // 1. Generar embedding de la query
+    const embedding = await this.embeddingService.generateEmbedding(query);
+    if (!embedding) {
+      // Podrías lanzar un error o simplemente retornar []
+      return [];
+    }
+
+    // 2. Búsqueda en el repositorio
+    return await this.ttRepository.findBySemanticQuery(embedding);
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/ExtractMetadataUseCase.ts
+import { CreateTTDTO } from "../../infrastructure/dtos/CreateTTDTO";
+import { MetadataExtractorService } from "../../infrastructure/services/MetadataExtractorService";
+
+
+
+export class ExtractMetadataUseCase{
+    constructor(
+        private readonly metadataExtractorService:MetadataExtractorService
+    ){}
+    public async execute(fileBuffer:Buffer){
+        if(!fileBuffer){
+            throw new Error("No hay pdf quek")
+        }
+        let metadata :CreateTTDTO= await this.metadataExtractorService.generarMetadata(fileBuffer);
+        return metadata
+    }
+}
+
+
+// Backend/src/modules/tt/application/useCases/UpdateTTUseCase.ts
+// src/modules/tt/application/useCases/UpdateTTUseCase.ts
+
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+import { DeepPartial } from "../../../../shared/types/DeepPartial";
+import { EmbeddingService } from "../../infrastructure/services/EmbeddingService";
+
+/**
+ * Caso de uso para actualizar un TT existente.
+ */
+export class UpdateTTUseCase {
+  constructor(
+    private readonly ttRepository: TTRepositoryPort,
+    private readonly embeddingService: EmbeddingService
+  ) {}
+
+  /**
+   * Ejecuta el caso de uso para actualizar un TT.
+   * @param id - ID del TT a actualizar
+   * @param updateData - Datos a actualizar
+   * @returns TTEntity actualizada o null si no se encuentra
+   */
+  public async execute(
+    id: string,
+    updateData: DeepPartial<TTEntity>
+  ): Promise<TTEntity | null> {
+    // Si hay un campo "resumen" en updateData, regenerar embedding
+    if (updateData.resumen) {
+      const embedding = await this.embeddingService.generateEmbedding(
+        updateData.resumen
+      );
+      (updateData as any).plot_embedding = embedding || [];
+    }
+
+    return await this.ttRepository.updateTTById(id, updateData);
+  }
+}
+
+
+
+// Backend/src/modules/tt/application/useCases/ListTTUseCase.ts
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+
+/**
+ * Caso de uso para listar TTs con filtros y paginación.
+ */
+export class ListTTUseCase {
+  constructor(private readonly ttRepository: TTRepositoryPort) {}
+
+  /**
+   * Ejecuta el caso de uso para listar TTs.
+   * @param filters - Filtros de búsqueda y paginación
+   * @returns Lista de TTs con total, página, límite y datos
+   */
+  public async execute(filters: {
+    titulo?: string;
+    autor?: string;
+    unidadAcademica?: string;
+    grado?: string;
+    palabrasClave?: string[];
+    anoPublicacion?: number;
+    limit?: number;
+    page?: number;
+  }): Promise<{
+    total: number;
+    page: number;
+    limit: number;
+    data: TTEntity[];
+  }> {
+    return await this.ttRepository.listTT(filters);
+  }
+}
+
+
+
+// Backend/src/modules/tt/domain/entities/TTEntity.ts
+/**
+ * Entidad que representa un Trabajo de Titulación (TT).
+ * Ajusta o extiende según tus necesidades.
+ */
+export interface TTEntity {
+  _id?: string;
+  titulo: string;
+  autores: Array<{
+    nombreCompleto: string;
+    orcid?: string;
+  }>;
+  palabrasClave: string[];
+  unidadAcademica: string;
+  directores: Array<{
+    nombreCompleto: string;
+    orcid?: string;
+  }>;
+  grado: string;
+  resumen: string;
+  documentoUrl?: string;
+  filename?: string;
+  fechaPublicacion?: Date;
+  plot_embedding?: number[];
+  // Otras propiedades que requieras...
+}
+
+
+
+// Backend/src/modules/tt/domain/TTRepositoryPort.ts
+// src/modules/tt/domain/TTRepositoryPort.ts
+
+import { TTEntity } from "./entities/TTEntity";
+import { DeepPartial } from "../../../shared/types/DeepPartial";
+
+/**
+ * Puerto (interfaz) que define las operaciones del repositorio TT.
+ */
+export interface TTRepositoryPort {
+  createTT(tt: TTEntity): Promise<TTEntity>;
+
+  listTT(filters: {
+    titulo?: string;
+    autor?: string;
+    unidadAcademica?: string;
+    grado?: string;
+    palabrasClave?: string[];
+    anoPublicacion?: number;
+    limit?: number;
+    page?: number;
+  }): Promise<{ total: number; page: number; limit: number; data: TTEntity[] }>;
+
+  findTTById(id: string): Promise<TTEntity | null>;
+
+  updateTTById(
+    id: string,
+    updateData: DeepPartial<TTEntity>
+  ): Promise<TTEntity | null>;
+
+  deleteTTById(id: string): Promise<{ deletedCount: number }>;
+
+  findBySemanticQuery(embedding: number[]): Promise<TTEntity[]>;
+
+  // downloadTT(id: string): Promise<{ filename: string }>;
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/controllers/TTController.ts
+import { Request, Response, NextFunction } from "express";
+import { CreateTTUseCase } from "../../application/useCases/CreateTTUseCase";
+import { ListTTUseCase } from "../../application/useCases/ListTTUseCase";
+import { GetTTByIdUseCase } from "../../application/useCases/GetTTByIdUseCase";
+import { UpdateTTUseCase } from "../../application/useCases/UpdateTTUseCase";
+import { DeleteTTUseCase } from "../../application/useCases/DeleteTTUseCase";
+import { GoogleCloudStorageService } from "../services/GoogleCloudStorageService";
+import { CreateTTDTO } from "../dtos/CreateTTDTO";
+import { UpdateTTDTO } from "../dtos/UpdateTTDTO";
+import { DeepPartial } from "../../../../shared/types/DeepPartial";
+import { TTEntity } from "../../domain/entities/TTEntity";
+import { SemanticSearchUseCase } from "../../application/useCases/SemanticSearchUseCase";
+import { ExtractMetadataUseCase } from "../../application/useCases/ExtractMetadataUseCase";
+
+/**
+ * Controlador para manejar peticiones HTTP relacionadas con TT.
+ */
+export class TTController {
+  constructor(
+    private readonly createTTUseCase: CreateTTUseCase,
+    private readonly listTTUseCase: ListTTUseCase,
+    private readonly getTTByIdUseCase: GetTTByIdUseCase,
+    private readonly updateTTUseCase: UpdateTTUseCase,
+    private readonly deleteTTUseCase: DeleteTTUseCase,
+    private readonly googleCloudService: GoogleCloudStorageService,
+    private readonly semanticSearchUseCase: SemanticSearchUseCase,
+    private readonly extractMetadataUseCase: ExtractMetadataUseCase
+  ) {}
+
+  public downloadTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      if (!ttId) {
+        res.status(400).json({ message: "ttId es requerido" });
+        return;
+      }
+
+      // Buscar TT
+      const tt = await this.getTTByIdUseCase.execute(ttId);
+      if (!tt) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+
+      // Verificar si hay un archivo asociado
+      if (!tt.filename) {
+        res.status(404).json({ message: "No hay archivo asociado" });
+        return;
+      }
+
+      // Generar la URL firmada
+      const signedUrl = await this.googleCloudService.getSignedUrl(tt.filename);
+
+      // Responder con la URL firmada
+      res.json({
+        message: "URL generada con éxito",
+        downloadUrl: signedUrl,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja la creación de un nuevo TT.
+   */
+  public createTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      // Extraer los datos del body (DTO)
+      const body: CreateTTDTO = req.body;
+      const file = req.file; // vía multer
+
+      // Si hay archivo, subimos primero a GCS
+      let fileUrl = "";
+      if (file) {
+        fileUrl = await this.googleCloudService.uploadFile(file);
+      }
+
+      // Creamos el TT
+
+      // Campos que vienen como JSON
+      // const autores = JSON.parse(req.body.autores || "[]");
+      // const directores = JSON.parse(req.body.directores || "[]");
+      // const palabrasClave = JSON.parse(req.body.palabrasClave || "[]");
+
+      const newTT = await this.createTTUseCase.execute({
+        titulo: body.titulo,
+        autores:
+          typeof body.autores === "string"
+            ? JSON.parse(body.autores)
+            : body.autores,
+        directores:
+          typeof body.directores === "string"
+            ? JSON.parse(body.directores)
+            : body.directores,
+        palabrasClave:
+          typeof body.palabrasClave === "string"
+            ? JSON.parse(body.palabrasClave)
+            : body.palabrasClave,
+        unidadAcademica: body.unidadAcademica,
+        grado: body.grado,
+        resumen: body.resumen,
+        documentoUrl: fileUrl || "", // Guardamos la URL
+        filename: file ? file.originalname : "",
+        fechaPublicacion: new Date(),
+      });
+
+      // Enviar la respuesta sin retornar
+      res.status(201).json({
+        message: "TT creado con éxito",
+        data: newTT,
+      });
+    } catch (error: any) {
+      // Pasar el error al manejador de errores de Express
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja la lista de TTs con filtros y paginación.
+   */
+  public listTT = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const filters = {
+        titulo: req.query.titulo as string,
+        autor: req.query.autor as string,
+        unidadAcademica: req.query.unidadAcademica as string,
+        grado: req.query.grado as string,
+        palabrasClave: req.query.palabrasClave
+          ? Array.isArray(req.query.palabrasClave)
+            ? (req.query.palabrasClave as string[])
+            : [req.query.palabrasClave as string]
+          : [],
+        anoPublicacion: req.query.anoPublicacion
+          ? Number(req.query.anoPublicacion)
+          : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : 10,
+        page: req.query.page ? Number(req.query.page) : 1,
+      };
+
+      const result = await this.listTTUseCase.execute(filters);
+
+      res.status(200).json({
+        message: "Lista de TTs obtenida con éxito",
+        data: result,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja obtener un TT por su ID.
+   */
+  public getTTById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+
+      if (!ttId) {
+        res.status(400).json({ message: "ttId es requerido" });
+        return;
+      }
+
+      const tt = await this.getTTByIdUseCase.execute(ttId);
+
+      if (!tt) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+
+      res.status(200).json({
+        message: "TT obtenido con éxito",
+        data: tt,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja actualizar un TT existente.
+   */
+  public updateTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+      const updateData: UpdateTTDTO = req.body;
+
+      if (!ttId) {
+        res.status(400).json({ message: "ttId es requerido" });
+        return;
+      }
+
+      const updatedTT = await this.updateTTUseCase.execute(
+        ttId,
+        updateData as DeepPartial<TTEntity>
+      );
+
+      if (!updatedTT) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+
+      res.status(200).json({
+        message: "TT actualizado con éxito",
+        data: updatedTT,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  /**
+   * Maneja eliminar un TT.
+   */
+  public deleteTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { ttId } = req.params;
+
+      if (!ttId) {
+        res.status(400).json({ message: "ttId es requerido" });
+        return;
+      }
+
+      const deleted = await this.deleteTTUseCase.execute(ttId);
+
+      if (!deleted) {
+        res.status(404).json({ message: "TT no encontrado" });
+        return;
+      }
+
+      res.status(200).json({
+        message: "TT eliminado con éxito",
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
+
+  public searchSemanticTT = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const queryString = req.query.query as string;
+      if (!queryString) {
+        res.status(400).json({ message: "Falta 'query' en los query params" });
+        return;
+      }
+
+      const results = await this.semanticSearchUseCase.execute(queryString);
+      res.json({
+        message: "Resultados semánticos",
+        data: results,
+      });
+      return;
+    } catch (error) {
+      next(error);
+    }
+  };
+  public extractMetadata=async(
+    req:Request,
+    res:Response,
+    next:NextFunction
+  ):Promise<void>=>{
+    try {
+      const file = req.file
+      if(!file){
+        res.status(400).json({message:"Falta el pdf en el req"});
+        return;
+      }
+      const metadata = await this.extractMetadataUseCase.execute(file.buffer) 
+      res.json({
+        message:"Metadata Extraida Correctamente",
+        data:metadata
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/dtos/CreateTTDTO.ts
+/**
+ * DTO para la creación de un TT. Lo usaremos en el Controller
+ * para mapear los datos que vienen del request a nuestra entidad.
+ */
+export interface CreateTTDTO {
+  titulo: string;
+  autores: Array<{
+    nombreCompleto: string;
+    orcid?: string;
+  }>;
+  palabrasClave: string[];
+  unidadAcademica: string;
+  directores: Array<{
+    nombreCompleto: string;
+    orcid?: string;
+  }>;
+  grado: string;
+  resumen: string;
+  // El documento se sube a GCloud; luego guardamos la URL:
+  file?: Express.Multer.File;
+  fechaPublicacion?: Date;
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/dtos/GetTTByIdDTO.ts
+/**
+ * DTO para obtener un TT por ID.
+ */
+export interface GetTTByIdDTO {
+  ttId: string;
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/dtos/ListTTDTO.ts
+/**
+ * DTO para listar TTs.
+ */
+export interface ListTTDTO {
+  titulo?: string;
+  autor?: string;
+  unidadAcademica?: string;
+  grado?: string;
+  palabrasClave?: string[];
+  anoPublicacion?: number;
+  limit?: number;
+  page?: number;
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/dtos/DeleteTTDTO.ts
+/**
+ * DTO para eliminar un TT.
+ */
+export interface DeleteTTDTO {
+  ttId: string;
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/dtos/UpdateTTDTO.ts
+/**
+ * DTO para actualizar un TT.
+ */
+export interface UpdateTTDTO {
+  titulo?: string;
+  autores?: Array<{
+    nombreCompleto?: string;
+    orcid?: string;
+  }>;
+  palabrasClave?: string[];
+  unidadAcademica?: string;
+  directores?: Array<{
+    nombreCompleto?: string;
+    orcid?: string;
+  }>;
+  grado?: string;
+  resumen?: string;
+  // El documentoUrl y fechaPublicacion no deberían ser actualizados directamente
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/repositories/MongoTTRepository.ts
+// src/modules/tt/infrastructure/repositories/MongoTTRepository.ts
+
+import { DeepPartial } from "../../../../shared/types/DeepPartial";
+import { TTRepositoryPort } from "../../domain/TTRepositoryPort";
+import { TTEntity } from "../../domain/entities/TTEntity";
+import { model, Schema, Document } from "mongoose";
+
+/**
+ * Definimos un Schema de Mongoose para TT
+ */
+const TTSchema = new Schema({
+  titulo: { type: String, required: true },
+  autores: [
+    {
+      nombreCompleto: { type: String, required: true },
+      orcid: { type: String, required: false },
+    },
+  ],
+  palabrasClave: [String],
+  unidadAcademica: { type: String, required: true },
+  directores: [
+    {
+      nombreCompleto: { type: String, required: true },
+      orcid: { type: String, required: false },
+    },
+  ],
+  grado: { type: String, required: true },
+  resumen: { type: String, required: true },
+  documentoUrl: { type: String, required: false },
+  filename: { type: String, required: false },
+  fechaPublicacion: { type: Date, default: Date.now },
+  plot_embedding: { type: [Number], default: [] }, // <-- Almacena array de floats
+});
+
+export interface TTDocument extends TTEntity, Document {
+  _id: string;
+}
+
+/**
+ * Creamos el modelo
+ */
+const TTModel = model<TTDocument>("TT", TTSchema);
+
+/**
+ * Implementación de la interfaz TTRepositoryPort usando MongoDB (Mongoose).
+ */
+export class MongoTTRepository implements TTRepositoryPort {
+  public async createTT(tt: TTEntity): Promise<TTEntity> {
+    const created = await TTModel.create(tt);
+    return created.toObject(); // Convertimos el documento de Mongoose a objeto plano
+  }
+
+  public async listTT(filters: {
+    titulo?: string;
+    autor?: string;
+    unidadAcademica?: string;
+    grado?: string;
+    palabrasClave?: string[];
+    anoPublicacion?: number;
+    limit?: number;
+    page?: number;
+  }): Promise<{
+    total: number;
+    page: number;
+    limit: number;
+    data: TTEntity[];
+  }> {
+    const {
+      titulo,
+      autor,
+      unidadAcademica,
+      grado,
+      palabrasClave,
+      anoPublicacion,
+      limit = 10,
+      page = 1,
+    } = filters;
+
+    const query: any = {};
+
+    if (titulo) query.titulo = { $regex: titulo, $options: "i" };
+    if (autor)
+      query["autores.nombreCompleto"] = { $regex: autor, $options: "i" };
+    if (unidadAcademica)
+      query.unidadAcademica = { $regex: unidadAcademica, $options: "i" };
+    if (grado) query.grado = { $regex: grado, $options: "i" };
+    if (palabrasClave && palabrasClave.length > 0) {
+      query.palabrasClave = { $in: palabrasClave };
+    }
+    if (anoPublicacion) {
+      const startDate = new Date(`${anoPublicacion}-01-01`);
+      const endDate = new Date(`${anoPublicacion}-12-31`);
+      query.fechaPublicacion = { $gte: startDate, $lte: endDate };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [total, data] = await Promise.all([
+      TTModel.countDocuments(query),
+      TTModel.find(query).skip(skip).limit(limit).exec(),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      data: data.map((doc) => doc.toObject()),
+    };
+  }
+
+  public async findTTById(id: string): Promise<TTEntity | null> {
+    try {
+      const tt = await TTModel.findById(id).exec();
+      return tt ? tt.toObject() : null;
+    } catch (error) {
+      console.error("Error al encontrar TT por ID:", error);
+      throw error;
+    }
+  }
+
+  public async updateTTById(
+    id: string,
+    updateData: DeepPartial<TTEntity>
+  ): Promise<TTEntity | null> {
+    try {
+      const updated = await TTModel.findByIdAndUpdate(id, updateData, {
+        new: true,
+      }).exec();
+      // console.log("updated", updated);
+      return updated ? updated.toObject() : null;
+    } catch (error) {
+      console.error("Error al actualizar TT por ID:", error);
+      throw error;
+    }
+  }
+
+  public async deleteTTById(id: string): Promise<{ deletedCount: number }> {
+    try {
+      const result = await TTModel.deleteOne({ _id: id }).exec();
+      return { deletedCount: result.deletedCount };
+    } catch (error) {
+      console.error("Error al eliminar TT por ID:", error);
+      throw error;
+    }
+  }
+
+  public async findBySemanticQuery(embedding: number[]): Promise<TTEntity[]> {
+    // MongoDB Aggregation pipeline con $vectorSearch
+    // Nombre del índice: "vector_index_resumen" (debes configurarlo en Atlas)
+    const pipeline = [
+      {
+        $vectorSearch: {
+          index: "vector_index_resumen",
+          path: "plot_embedding",
+          queryVector: embedding,
+          numCandidates: 50, // Ajusta según quieras
+          limit: 2,
+        },
+      },
+    ];
+
+    // Convertir cada documento en TTEntity
+    // Ojo: Mongoose .aggregate() retorna objetos plain, no instancias.
+    // console.log("Pipeline de búsqueda semántica:", pipeline);
+    const results = await TTModel.aggregate(pipeline).exec();
+
+    // console.log("Resultados de búsqueda semántica:", results);
+
+    return results.map((doc: any) => ({
+      _id: doc._id?.toString(),
+      titulo: doc.titulo,
+      autores: doc.autores,
+      palabrasClave: doc.palabrasClave,
+      unidadAcademica: doc.unidadAcademica,
+      directores: doc.directores,
+      grado: doc.grado,
+      resumen: doc.resumen,
+      documentoUrl: doc.documentoUrl,
+      fechaPublicacion: doc.fechaPublicacion,
+      plot_embedding: doc.plot_embedding,
+    }));
+  }
+
+  // Otros métodos como findTTsByQuery, etc.
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/services/EmbeddingService.ts
+import axios from "axios";
+import dotenv from "dotenv";
+dotenv.config();
+
+/**
+ * Servicio que maneja la generación de embeddings usando la API de OpenAI (o GPT).
+ */
+export class EmbeddingService {
+  private openAiKey: string;
+  private model: string;
+
+  constructor() {
+    this.openAiKey = process.env.OPENAI_API_KEY || ""; // Asegúrate de setear esto en .env
+    this.model = "text-embedding-ada-002"; // Modelo por defecto
+  }
+
+  /**
+   * Generar el embedding a partir de un texto (resumen).
+   * @param text Texto para el cual generamos el embedding.
+   */
+  public async generateEmbedding(text: string): Promise<number[] | null> {
+    if (!this.openAiKey) {
+      console.error("No se encontró la clave OPENAI_API_KEY en .env");
+      return null;
+    }
+    console.log("Generando embedding para:", text);
+    try {
+      const response = await axios.post(
+        "https://api.openai.com/v1/embeddings",
+        {
+          input: text,
+          model: this.model,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.openAiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.status === 200) {
+        const embedding = response.data.data[0].embedding;
+        return embedding;
+      } else {
+        console.error(
+          `No se pudo recibir el embedding. Status: ${response.status}`
+        );
+        return null;
+      }
+    } catch (error: any) {
+      console.error(
+        "Error al generar el embedding:",
+        error.response?.data || error.message
+      );
+      return null;
+    }
+  }
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/services/GoogleCloudStorageService.ts
+import { Storage, GetSignedUrlConfig } from "@google-cloud/storage";
+import dotenv from "dotenv";
+dotenv.config();
+
+/**
+ * Servicio que maneja la subida de archivos a Google Cloud Storage.
+ */
+
+const keyFilename = process.env.GCLOUD_KEYFILE || "key.json";
+const bucketName = process.env.GCLOUD_BUCKET || "trabajosterminales";
+const storage = new Storage({ keyFilename });
+
+export class GoogleCloudStorageService {
+  private bucket = storage.bucket(bucketName);
+
+  public async uploadFile(file: Express.Multer.File): Promise<string> {
+    const fileName = Date.now() + "-" + file.originalname;
+    const blob = this.bucket.file(fileName);
+    const blobStream = blob.createWriteStream({
+      metadata: {
+        contentType: file.mimetype,
+      },
+    });
+
+    return new Promise((resolve, reject) => {
+      blobStream.on("error", (err) => {
+        reject(err);
+      });
+
+      blobStream.on("finish", async () => {
+        // Generar la URL pública o firmada (en este caso, preferimos Signed URL o
+        // simplemente almacenar "fileName" en DB y generarla después al descargar)
+        const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
+        resolve(publicUrl);
+      });
+
+      blobStream.end(file.buffer);
+    });
+  }
+
+  /**
+   * Generar una URL firmada para descargar un archivo.
+   * @param fileName Nombre del archivo en el bucket
+   * @param expiresInMs default 5 minutos
+   */
+  public async getSignedUrl(
+    fileName: string,
+    expiresInMs: number = 1000 * 60 * 5
+  ): Promise<string> {
+    const file = this.bucket.file(fileName);
+    const exists = await file.exists();
+    if (!exists[0]) {
+      throw new Error("File not found in GCS");
+    }
+
+    const options: GetSignedUrlConfig = {
+      action: "read",
+      expires: Date.now() + expiresInMs,
+    };
+
+    const [signedUrl] = await file.getSignedUrl(options);
+    return signedUrl;
+  }
+
+  /**
+   * (Opcional) Eliminar un archivo del bucket
+   */
+  public async deleteFile(fileName: string): Promise<void> {
+    const file = this.bucket.file(fileName);
+    await file.delete();
+  }
+}
+
+
+
+// Backend/src/modules/tt/infrastructure/services/MetadataExtractorService.ts
+import { OpenAI } from "openai";
+import pdfParse from "pdf-parse";
+import fs from "fs";
+
+// Configurar OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
+});
+
+export class MetadataExtractorService {
+  // Método para generar metadata desde un archivo PDF
+  async generarMetadata(pdfFile: Buffer | string): Promise<any> {
+    try {
+      // Leer el contenido del archivo PDF
+      const pdfBuffer = typeof pdfFile === "string" ? fs.readFileSync(pdfFile) : pdfFile;
+      const pdfData = await pdfParse(pdfBuffer);
+
+      // Limitar el texto a un máximo de 5000 caracteres
+      const maxChars = 5000;
+      const limitedText = pdfData.text.slice(0, maxChars);
+
+      // Crear el prompt para OpenAI
+      const prompt = `
+      A continuación tienes el texto completo de un documento académico. Extrae la metadata en formato JSON sin incluir delimitadores de código ni texto adicional:
+      - "titulo": El título del documento.
+      - "autores": Un arreglo de objetos con "nombreCompleto" y opcionalmente "orcid" este solo si esta mencionado.
+      - "palabrasClave": Una lista de palabras clave (máximo 5).
+      - "unidadAcademica": La unidad académica asociada (solo la escuela).
+      - "directores": Un arreglo de objetos con "nombreCompleto" y opcionalmente "orcid".
+      - "grado": El grado académico relacionado (Maestría, Licenciatura, Doctorado).
+      - "resumen": Un breve resumen del documento (minimo de 100 palabras pero que este bien descrito) (es lo más importante ya que se usará para luego crear embeddings).
+      - "fechaPublicacion": La fecha de publicación (si está disponible).
+      Texto del documento:
+      ---
+      ${limitedText}
+      ---
+      `;   
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "Eres un modelo que extrae metadata académica." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 500,
+      });
+
+      let metadata = {
+        titulo: "",
+        autores: [],
+        palabrasClave: [],
+        unidadAcademica: "",
+        directores: [],
+        grado: "",
+        resumen: "",
+        fechaPublicacion: "",
+      };
+
+      if (response.choices[0].message?.content) {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonResponse = responseContent.replace(/json|/g, '').trim();
+
+        try {
+          const parsedMetadata = JSON.parse(jsonResponse);
+          metadata = { ...metadata, ...parsedMetadata };
+        } catch (error) {
+          console.error("Error al parsear JSON:", error);
+        }
+      }
+
+      return metadata;
+    } catch (error) {
+      console.error("Error al generar metadata:", error);
+      throw error;
+    }
+  }
+}
+
+
+// Backend/src/modules/tt/infrastructure/index.ts
+import multer from "multer";
+import { MongoTTRepository } from "./repositories/MongoTTRepository";
+import { CreateTTUseCase } from "../application/useCases/CreateTTUseCase";
+import { ListTTUseCase } from "../application/useCases/ListTTUseCase";
+import { GetTTByIdUseCase } from "../application/useCases/GetTTByIdUseCase";
+import { UpdateTTUseCase } from "../application/useCases/UpdateTTUseCase";
+import { DeleteTTUseCase } from "../application/useCases/DeleteTTUseCase";
+import { SemanticSearchUseCase } from "../application/useCases/SemanticSearchUseCase";
+import { TTController } from "./controllers/TTController";
+import { GoogleCloudStorageService } from "./services/GoogleCloudStorageService";
+import { EmbeddingService } from "./services/EmbeddingService";
+import {ExtractMetadataUseCase } from "../application/useCases/ExtractMetadataUseCase"
+import { MetadataExtractorService } from "./services/MetadataExtractorService";
+// import { DeepPartial } from '../../../shared/types/DeepPartial';
+
+// 1. Instancia del repositorio (Mongo)
+const embeddingService = new EmbeddingService();
+const ttRepository = new MongoTTRepository();
+
+// 2. Instancia de los casos de uso
+const createTTUseCase = new CreateTTUseCase(ttRepository, embeddingService);
+const listTTUseCase = new ListTTUseCase(ttRepository);
+const getTTByIdUseCase = new GetTTByIdUseCase(ttRepository);
+const updateTTUseCase = new UpdateTTUseCase(ttRepository, embeddingService);
+const deleteTTUseCase = new DeleteTTUseCase(ttRepository);
+
+const semanticSearchUseCase = new SemanticSearchUseCase(
+  ttRepository,
+  embeddingService
+);
+const metadataExtractorService = new MetadataExtractorService()
+const extractMetadataUseCase= new ExtractMetadataUseCase(metadataExtractorService)
+// 3. Instancia del servicio de GCS
+const googleCloudService = new GoogleCloudStorageService();
+
+// 4. Instancia del controlador
+const controller = new TTController(
+  createTTUseCase,
+  listTTUseCase,
+  getTTByIdUseCase,
+  updateTTUseCase,
+  deleteTTUseCase,
+  googleCloudService,
+  semanticSearchUseCase,
+  extractMetadataUseCase
+);
+
+// 5. Configurar Multer
+const upload = multer({ storage: multer.memoryStorage() });
+
+// 6. Exportar el controlador con los middlewares
+export const ttController = {
+  createTT: upload.single("file"),
+  createTTHandler: controller.createTT,
+  listTT: controller.listTT,
+  getTTById: controller.getTTById,
+  updateTT: controller.updateTT,
+  deleteTT: controller.deleteTT,
+  downloadTT: controller.downloadTT,
+  searchSemanticTT: controller.searchSemanticTT,
+  extractMetadata:controller.extractMetadata
+};
+
+
+

@@ -19,4 +19,6 @@ export interface CreateTTDTO {
   // El documento se sube a GCloud; luego guardamos la URL:
   file?: Express.Multer.File;
   fechaPublicacion?: Date;
+  createdBy?: string;
+  status?: string;
 }

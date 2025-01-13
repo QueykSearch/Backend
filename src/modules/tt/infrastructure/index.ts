@@ -9,8 +9,10 @@ import { SemanticSearchUseCase } from "../application/useCases/SemanticSearchUse
 import { TTController } from "./controllers/TTController";
 import { GoogleCloudStorageService } from "./services/GoogleCloudStorageService";
 import { EmbeddingService } from "./services/EmbeddingService";
-import {ExtractMetadataUseCase } from "../application/useCases/ExtractMetadataUseCase"
+import { ExtractMetadataUseCase } from "../application/useCases/ExtractMetadataUseCase";
 import { MetadataExtractorService } from "./services/MetadataExtractorService";
+import { ApproveTTUseCase } from "../application/useCases/ApproveTTUseCase";
+import { RejectTTUseCase } from "../application/useCases/RejectTTUseCase";
 // import { DeepPartial } from '../../../shared/types/DeepPartial';
 
 // 1. Instancia del repositorio (Mongo)
@@ -23,13 +25,17 @@ const listTTUseCase = new ListTTUseCase(ttRepository);
 const getTTByIdUseCase = new GetTTByIdUseCase(ttRepository);
 const updateTTUseCase = new UpdateTTUseCase(ttRepository, embeddingService);
 const deleteTTUseCase = new DeleteTTUseCase(ttRepository);
+const approveTTUseCase = new ApproveTTUseCase(ttRepository);
+const rejectTTUseCase = new RejectTTUseCase(ttRepository);
 
 const semanticSearchUseCase = new SemanticSearchUseCase(
   ttRepository,
   embeddingService
 );
-const metadataExtractorService = new MetadataExtractorService()
-const extractMetadataUseCase= new ExtractMetadataUseCase(metadataExtractorService)
+const metadataExtractorService = new MetadataExtractorService();
+const extractMetadataUseCase = new ExtractMetadataUseCase(
+  metadataExtractorService
+);
 // 3. Instancia del servicio de GCS
 const googleCloudService = new GoogleCloudStorageService();
 
@@ -40,6 +46,8 @@ const controller = new TTController(
   getTTByIdUseCase,
   updateTTUseCase,
   deleteTTUseCase,
+  approveTTUseCase,
+  rejectTTUseCase,
   googleCloudService,
   semanticSearchUseCase,
   extractMetadataUseCase
@@ -58,5 +66,5 @@ export const ttController = {
   deleteTT: controller.deleteTT,
   downloadTT: controller.downloadTT,
   searchSemanticTT: controller.searchSemanticTT,
-  extractMetadata:controller.extractMetadata
+  extractMetadata: controller.extractMetadata,
 };

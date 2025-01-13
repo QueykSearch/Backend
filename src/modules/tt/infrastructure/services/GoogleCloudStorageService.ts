@@ -14,7 +14,7 @@ export class GoogleCloudStorageService {
   private bucket = storage.bucket(bucketName);
 
   public async uploadFile(file: Express.Multer.File): Promise<string> {
-    const fileName = Date.now() + "-" + file.originalname;
+    const fileName = file.originalname;
     const blob = this.bucket.file(fileName);
     const blobStream = blob.createWriteStream({
       metadata: {
