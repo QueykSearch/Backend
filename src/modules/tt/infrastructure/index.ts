@@ -67,4 +67,6 @@ export const ttController = {
   downloadTT: controller.downloadTT,
   searchSemanticTT: controller.searchSemanticTT,
   extractMetadata: controller.extractMetadata,
+  approveTT: controller.approveTT,
+  rejectTT: controller.rejectTT,
 };
